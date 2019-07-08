@@ -1,6 +1,6 @@
-import data.matrix data.rat.basic linear_algebra.basis data.fintype
+import data.matrix data.rat.basic
 import linear_algebra.determinant .misc order.pilex
-import order.lexicographic .list_sup .fin_find
+import order.lexicographic .list_sup .fin_find tactic.omega tactic.abel
 import data.list.min_max algebra.associated .matrix_pequiv
 
 open matrix fintype finset function
@@ -51,7 +51,7 @@ def comatrix (M : matrix (fin n) (fin n) ℚ) : matrix (fin n) (fin n) ℚ :=
 begin
   cases n,
   { exact fin.elim0 },
-  { exact λ i j, (-1) ^ ((i + j : ℕ) % 2) * det (minor M
+  { exact λ i j, (-1) ^ (i + j : ℕ) * det (minor M
       (λ i' : fin n, if i'.1 < i.1 then i'.cast_succ
         else i'.succ)
       (λ j' : fin n, if j'.1 < j.1 then j'.cast_succ
@@ -66,7 +66,7 @@ lemma inverse_mul {M : matrix (fin m) (fin n) ℚ} (h : M.has_left_inverse) :
   inverse M ⬝ M = 1 := sorry
 
 /-- false with current inverse definition. True when `M` is square -/
-lemma mul_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_left_inverse) :
+lemma mul_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_right_inverse) :
   M ⬝ inverse M = 1 := sorry
 
 def rvec.to_list {n : ℕ} (x : rvec n) : list ℚ :=
@@ -115,10 +115,6 @@ instance : has_repr (pert_rat m) := prod.has_repr
 
 open list
 
-@[simp] lemma fin.mk.inj_iff {n a b : ℕ} {ha : a < n} {hb : b < n} :
-  fin.mk a ha = fin.mk b hb ↔ a = b :=
-⟨fin.mk.inj, λ h, by subst h⟩
-
 def pequiv_of_vector (v : vector (fin n) m) (hv : v.1.nodup) : pequiv (fin m) (fin n) :=
 { to_fun := λ i, some $ v.nth i,
   inv_fun := λ j, fin.find (λ i, v.nth i = j),
@@ -132,7 +128,7 @@ def pequiv_of_vector (v : vector (fin n) m) (hv : v.1.nodup) : pequiv (fin m) (f
       end)
       (option.some_inj.1 h)⟩ }
 
-def non_basis_vector_of_vector (v : vector (fin n) m) (hv : v.to_list.nodup) :
+def nonbasis_vector_of_vector (v : vector (fin n) m) (hv : v.to_list.nodup) :
   {v : vector (fin n) (n - m) // v.to_list.nodup} :=
 ⟨⟨(fin_range n).diff v.to_list,
   have h : m ≤ n,
@@ -155,144 +151,292 @@ def non_basis_vector_of_vector (v : vector (fin n) m) (hv : v.to_list.nodup) :
   nodup_diff (nodup_fin_range _)⟩
 
 def pre_nonbasis_of_vector (v : vector (fin n) m) (hv : v.1.nodup) : pequiv (fin (n - m)) (fin n) :=
-pequiv_of_vector (non_basis_vector_of_vector v hv).1 (non_basis_vector_of_vector v hv).2
+pequiv_of_vector (nonbasis_vector_of_vector v hv).1 (nonbasis_vector_of_vector v hv).2
 
 structure prebasis (m n : ℕ) : Type :=
 ( basis : pequiv (fin m) (fin n) )
-( non_basis : pequiv (fin (n - m)) (fin n) )
+( nonbasis : pequiv (fin (n - m)) (fin n) )
 ( basis_left_inv : basis.trans basis.symm = pequiv.refl (fin m) )
-( non_basis_left_inv : non_basis.trans non_basis.symm = pequiv.refl (fin (n - m)) )
-( basis_trans_non_basis_symm_eq_bot : basis.trans non_basis.symm = ⊥ )
+( nonbasis_left_inv : nonbasis.trans nonbasis.symm = pequiv.refl (fin (n - m)) )
+( basis_trans_nonbasis_symm_eq_bot : basis.trans nonbasis.symm = ⊥ )
 
 namespace prebasis
 open pequiv
 
-attribute [simp] basis_left_inv non_basis_left_inv basis_trans_non_basis_symm_eq_bot
+attribute [simp] basis_left_inv nonbasis_left_inv basis_trans_nonbasis_symm_eq_bot
 
 lemma is_some_basis (B : prebasis m n) : ∀ (i : fin m), (B.basis i).is_some :=
-by rw [← trans_symm_eq_iff_forall_mem, basis_left_inv]
+by rw [← trans_symm_eq_iff_forall_is_some, basis_left_inv]
 
-lemma is_some_non_basis (B : prebasis m n) : ∀ (k : fin (n - m)), (B.non_basis k).is_some :=
-by rw [← trans_symm_eq_iff_forall_mem, non_basis_left_inv]
+lemma is_some_nonbasis (B : prebasis m n) : ∀ (k : fin (n - m)), (B.nonbasis k).is_some :=
+by rw [← trans_symm_eq_iff_forall_is_some, nonbasis_left_inv]
 
 lemma injective_basis (B : prebasis m n) : injective B.basis :=
 injective_of_forall_is_some (is_some_basis B)
 
-lemma injective_non_basis (B : prebasis m n) : injective B.non_basis :=
-injective_of_forall_is_some (is_some_non_basis B)
+lemma injective_nonbasis (B : prebasis m n) : injective B.nonbasis :=
+injective_of_forall_is_some (is_some_nonbasis B)
+
+def basisg (B : prebasis m n) (r : fin m) : fin n :=
+option.get (B.is_some_basis r)
+
+def nonbasisg (B : prebasis m n) (s : fin (n - m)) : fin n :=
+option.get (B.is_some_nonbasis s)
+
+lemma injective_basisg (B : prebasis m n) : injective B.basisg :=
+λ x y h, by rw [basisg, basisg, ← option.some_inj, option.some_get, option.some_get] at h;
+  exact injective_basis B h
+
+lemma injective_nonbasisg (B : prebasis m n) : injective B.nonbasisg :=
+λ x y h, by rw [nonbasisg, nonbasisg, ← option.some_inj, option.some_get, option.some_get] at h;
+  exact injective_nonbasis B h
 
 local infix ` ♣ `: 70 := pequiv.trans
 
-def swap (B : prebasis m n) (i : fin m) (j : fin (n - m)) : prebasis m n :=
-let i' := @option.get _ (B.basis i) (B.is_some_basis _) in
-let j' := @option.get _ (B.non_basis j) (B.is_some_non_basis _) in
-{ basis := B.basis.trans (equiv.swap i' j').to_pequiv,
-  non_basis := B.non_basis.trans (equiv.swap i' j').to_pequiv,
+def swap (B : prebasis m n) (r : fin m) (s : fin (n - m)) : prebasis m n :=
+{ basis := B.basis.trans (equiv.swap (B.basisg r) (B.nonbasisg s)).to_pequiv,
+  nonbasis := B.nonbasis.trans (equiv.swap (B.basisg r) (B.nonbasisg s)).to_pequiv,
   basis_left_inv := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.basis,
         ← equiv.to_pequiv_symm,  ← equiv.to_pequiv_trans];
       simp,
-  non_basis_left_inv := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.non_basis, ← equiv.to_pequiv_symm,
+  nonbasis_left_inv := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.nonbasis, ← equiv.to_pequiv_symm,
         ← equiv.to_pequiv_trans];
       simp,
-  basis_trans_non_basis_symm_eq_bot := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.basis,
+  basis_trans_nonbasis_symm_eq_bot := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.basis,
       ← equiv.to_pequiv_symm, ← equiv.to_pequiv_trans];
     simp }
 
-lemma not_is_some_non_basis_of_is_some_basis (B : prebasis m n) (j : fin n) :
-  (B.basis.symm j).is_some → (B.non_basis.symm j).is_some → false :=
+lemma not_is_some_nonbasis_of_is_some_basis (B : prebasis m n) (j : fin n) :
+  (B.basis.symm j).is_some → (B.nonbasis.symm j).is_some → false :=
 begin
   rw [option.is_some_iff_exists, option.is_some_iff_exists],
   rintros ⟨i, hi⟩ ⟨k, hk⟩,
-  have : B.basis.trans B.non_basis.symm i = none,
-  { rw [B.basis_trans_non_basis_symm_eq_bot, pequiv.bot_apply] },
+  have : B.basis.trans B.nonbasis.symm i = none,
+  { rw [B.basis_trans_nonbasis_symm_eq_bot, pequiv.bot_apply] },
   rw [pequiv.trans_eq_none] at this,
   rw [pequiv.eq_some_iff] at hi,
   exact (this j k).resolve_left (not_not.2 hi) hk
 end
 
-lemma is_none_basis (B : prebasis m n) (j : fin n)
-  (hb : B.basis.symm j = none) (hnb : B.non_basis.symm j = none) : false :=
+lemma nonbasis_ne_none_of_basis_eq_none (B : prebasis m n) (j : fin n)
+  (hb : B.basis.symm j = none) (hnb : B.nonbasis.symm j = none) : false :=
 have hs : card (univ.image B.basis) = m,
   by rw [card_image_of_injective _ (B.injective_basis), card_univ, card_fin],
-have ht : card (univ.image B.non_basis) = (n - m),
-  by rw [card_image_of_injective _ (B.injective_non_basis), card_univ, card_fin],
-have hst : disjoint (univ.image B.basis) (univ.image B.non_basis),
+have ht : card (univ.image B.nonbasis) = (n - m),
+  by rw [card_image_of_injective _ (B.injective_nonbasis), card_univ, card_fin],
+have hst : disjoint (univ.image B.basis) (univ.image B.nonbasis),
   from finset.disjoint_left.2 begin
     simp only [mem_image, exists_imp_distrib, not_exists],
     assume j i _ hbasis k _ hnonbasis,
     cases option.is_some_iff_exists.1 (is_some_basis B i) with x hi,
-    cases option.is_some_iff_exists.1 (is_some_non_basis B k) with y hk,
+    cases option.is_some_iff_exists.1 (is_some_nonbasis B k) with y hk,
     have hxy : x = y,
     { rw [← option.some_inj, ← hk, ← hi, hbasis, hnonbasis] }, subst hxy,
     rw [← eq_some_iff] at hi hk,
-    refine not_is_some_non_basis_of_is_some_basis B x _ _;
+    refine not_is_some_nonbasis_of_is_some_basis B x _ _;
     simp [hi, hk]
   end,
-have (univ.image B.basis) ∪ (univ.image B.non_basis) = univ.image (@some (fin n)),
+have (univ.image B.basis) ∪ (univ.image B.nonbasis) = univ.image (@some (fin n)),
   from eq_of_subset_of_card_le
-    _
+    begin
+      assume i h,
+      simp only [finset.mem_image, finset.mem_union] at h,
+      rcases h with ⟨j, _, hj⟩ | ⟨k, _, hk⟩,
+      { simpa [hj.symm, option.is_some_iff_exists, eq_comm] using is_some_basis B j },
+      { simpa [hk.symm, option.is_some_iff_exists, eq_comm] using is_some_nonbasis B k }
+    end
     (begin
       rw [card_image_of_injective, card_univ, card_fin, card_disjoint_union hst, hs, ht],
-      exact nat.le_add_
+      { clear hst ht hs hnb hb B j, omega },
+      { intros _ _ h, injection h }
+    end),
+begin
+  simp only [option.eq_none_iff_forall_not_mem, mem_iff_mem B.basis, mem_iff_mem B.nonbasis] at hb hnb,
+  have := (finset.ext.1 this (some j)).2 (mem_image_of_mem _ (mem_univ _)),
+  simp only [hb, hnb, mem_image, finset.mem_union, option.mem_def.symm] at this, tauto
+end
 
-    end)
+lemma is_some_basis_iff (B : prebasis m n) (j : fin n) :
+  (B.basis.symm j).is_some ↔ ¬(B.nonbasis.symm j).is_some :=
+⟨not_is_some_nonbasis_of_is_some_basis B j,
+  by erw [option.not_is_some_iff_eq_none, ← option.ne_none_iff_is_some, forall_swap];
+    exact nonbasis_ne_none_of_basis_eq_none B j⟩
 
+@[simp] lemma nonbasis_basisg_eq_none (B : prebasis m n) (r : fin m) :
+  B.nonbasis.symm (B.basisg r) = none :=
+option.not_is_some_iff_eq_none.1 ((B.is_some_basis_iff _).1 (is_some_symm_get _ _))
 
--- lemma is_some_basis_iff (B : prebasis m n) {j : fin n} :
---   (B.basis.symm j).is_some ↔ ¬(B.non_basis.symm j).is_some :=
--- ⟨is_some_basis_iff_aux B, not_imp_comm.1 _⟩
+@[simp] lemma basis_nonbasisg_eq_none (B : prebasis m n) (s : fin (n - m)) :
+  B.basis.symm (B.nonbasisg s) = none :=
+option.not_is_some_iff_eq_none.1 (mt (B.is_some_basis_iff _).1 $ not_not.2 (is_some_symm_get _ _))
+
+@[simp] lemma basisg_mem (B : prebasis m n) (r : fin m) :
+  (B.basisg r) ∈ B.basis r :=
+option.get_mem _
+
+@[simp] lemma nonbasisg_mem (B : prebasis m n) (s : fin (n - m)) :
+  (B.nonbasisg s) ∈ B.nonbasis s :=
+option.get_mem _
+
+lemma mem_basis_basisg (B : prebasis m n) (r : fin m) : r ∈ B.basis.symm (B.basisg r) :=
+B.basis.mem_iff_mem.2 (basisg_mem _ _)
 
 lemma mul_symm_add_mul_symm (B : prebasis m n) :
   ((B.basis.symm.trans B.basis).to_matrix : matrix (fin n) (fin n) ℚ) +
-  (B.non_basis.symm.trans B.non_basis).to_matrix = 1 :=
+  (B.nonbasis.symm.trans B.nonbasis).to_matrix = 1 :=
 begin
   ext,
   simp only [add_val, pequiv.symm_trans, pequiv.to_matrix, one_val,
     pequiv.mem_of_set_iff, set.mem_set_of_eq],
-  have := is_some_basis B j,
+  have := is_some_basis_iff B j,
   split_ifs; tauto
 end
 
-
-lemma basis_trans_non_basis_eq_bot (B : prebasis m n) :
-  B.basis.trans B.non_basis.symm = ⊥ :=
+lemma swap_basis_eq (B : prebasis m n) (r : fin m) (s : fin (n - m)) :
+  (B.swap r s).basis.to_matrix = B.basis.to_matrix ⬝
+  ((1 : matrix (fin n) (fin n) ℚ) - (single (B.basisg r) (B.basisg r)).to_matrix +
+  (single (B.basisg r) (B.nonbasisg s)).to_matrix) :=
 begin
-  ext,
-  dsimp [pequiv.trans], simp,
-
+  dsimp [prebasis.swap],
+  rw [to_matrix_trans, swap_to_matrix_eq],
+  simp only [matrix.mul_add, sub_eq_add_neg, matrix.mul_neg, matrix.mul_one],
+  simp only [(to_matrix_trans _ _).symm],
+  rw [trans_single_of_eq_none _ (B.basis_nonbasisg_eq_none _),
+    trans_single_of_eq_none _ (B.basis_nonbasisg_eq_none _)],
+  simp
 end
 
+lemma swap_basis_tranpose_apply_single_of_ne (B : prebasis m n) (r : fin m) (s : fin (n - m)) (i : fin m) (hir : i ≠ r) :
+  ((B.swap r s).basis.to_matrixᵀ : matrix (fin n) (fin m) ℚ) ⬝ (single i (0 : fin 1)).to_matrix =
+  B.basis.to_matrixᵀ ⬝ (single i 0).to_matrix :=
+begin
+  simp only [swap_basis_eq, sub_eq_add_neg, matrix.mul_add, matrix.mul_neg, matrix.mul_one, matrix.add_mul,
+    (to_matrix_trans _ _).symm, (to_matrix_symm _).symm, transpose_add, transpose_neg, matrix.neg_mul, symm_trans_rev,
+    trans_assoc],
+  rw [trans_single_of_mem _ (mem_basis_basisg _ _), trans_single_of_eq_none, trans_single_of_eq_none, to_matrix_bot,
+    neg_zero, add_zero, add_zero];
+  {dsimp [single]; simp [*, B.injective_basisg.eq_iff]} <|> apply_instance
+end
 
-end prebasis
+lemma swap_basis_tranpose_apply_single (B : prebasis m n) (r : fin m) (s : fin (n - m)) :
+  ((B.swap r s).basis.to_matrixᵀ : matrix (fin n) (fin m) ℚ) ⬝ (single r (0 : fin 1)).to_matrix =
+  B.basis.to_matrixᵀ ⬝ (single r 0).to_matrix
 
-def pivot (A : matrix (fin m) (fin n) ℚ) (c : rvec n) (b : cvec m)
-  (B : array m (fin n))
-  (NB : array (n - m) (fin n))
-  (i : fin (n - m)) (j : fin m) :
-  array m (fin n) × -- basis
-  array (n - m) (fin n) × -- non basis
-  matrix (fin m) (fin (n - m)) ℚ × -- A_bar
-  (rvec m) × -- c_B
-  (rvec (n - m)) × --c_N
-  (cvec m) × --b_bar
-  matrix (fin m) (fin m) ℚ -- pert
-  :=
-let NBi : fin n := NB.read i in
-let Bj : fin n := B.read j in
-let NB' := NB.write i Bj in
-let B' := B.write j NBi in
-let A_B'_inverse := _root_.inverse (minor A id B'.read) in
-⟨B',
-  NB',
-  A_B'_inverse ⬝ minor A id NB'.read,
-  minor c id B'.read,
-  minor c id NB'.read,
-  A_B'_inverse ⬝ b,
-  A_B'_inverse⟩
+local prefix `?` := pequiv.to_matrix
 
-/-- given a basis, such that A_B is invertible, `solution_of_basis` returns `x` such that `A ⬝ x = b`. -/
-def solution_of_basis (A : matrix (fin m) (fin n) ℚ) (b : cvec m) (B : prebasis m n) : cvec n :=
-minor 1 id B.1.nth ⬝ inverse (minor A id B.1.nth) ⬝ b
+
+
+lemma cvec_eq_basis_add_nonbasis (x : cvec n) (B : prebasis m n) :
+  x = B.basis.to_matrixᵀ ⬝ B.basis.to_matrix ⬝ x + B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix ⬝ x :=
+by conv_lhs {rw [← x.one_mul, ← mul_symm_add_mul_symm B] };
+  simp [to_matrix_symm, to_matrix_trans, matrix.mul_add, matrix.add_mul, matrix.mul_assoc]
+
+
+lemma objective_function_eq
+  (A : matrix (fin m) (fin n) ℚ) (c : rvec n) (b : cvec m) (x : cvec n) (B : prebasis m n)
+  (h : A ⬝ x = b) (hAB : (A ⬝ B.basis.to_matrixᵀ).has_left_inverse) :
+  c ⬝ x = c ⬝ B.basis.to_matrixᵀ ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ b +
+  (c ⬝ B.nonbasis.to_matrixᵀ - c ⬝ B.basis.to_matrixᵀ ⬝
+    inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A ⬝ B.nonbasis.to_matrixᵀ) ⬝
+  B.nonbasis.to_matrix ⬝ x :=
+have B.basis.to_matrix ⬝ x = inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ b -
+  inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A ⬝ B.nonbasis.to_matrixᵀ
+  ⬝ B.nonbasis.to_matrix ⬝ x,
+  begin
+    have := congr_arg ((⬝) (inverse (A ⬝ B.basis.to_matrixᵀ))) h,
+    rw [cvec_eq_basis_add_nonbasis x B, matrix.mul_add,
+      matrix.mul_add, ← A.mul_assoc, ← A.mul_assoc, ← A.mul_assoc,
+      ← A.mul_assoc, ← (inverse (A ⬝ B.basis.to_matrixᵀ)).mul_assoc,
+      ← (inverse (A ⬝ B.basis.to_matrixᵀ)).mul_assoc, inverse_mul hAB,
+      matrix.one_mul, ← eq_sub_iff_add_eq] at this,
+    simp [this, matrix.mul_assoc],
+    all_goals {apply_instance}
+  end,
+begin
+  conv_lhs {rw [cvec_eq_basis_add_nonbasis x B, matrix.mul_assoc, this]},
+  simp [matrix.mul_add, matrix.mul_assoc, matrix.add_mul]
+end
+
+def objective_function_of_prebasis (A : matrix (fin m) (fin n) ℚ)
+  (c : rvec n) (b : cvec m) (B : prebasis m n) : matrix (fin 1) (fin 1) ℚ :=
+c ⬝ (B.basis.to_matrixᵀ ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ b)
+
+def reduced_cost (A : matrix (fin m) (fin n) ℚ)
+  (c : rvec n) (B : prebasis m n) (i : fin (n - m)) : matrix (fin 1) (fin 1) ℚ :=
+c ⬝ (1 - B.basis.to_matrixᵀ ⬝ (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A)) ⬝ B.nonbasis.to_matrixᵀ ⬝
+  (single i 0).to_matrix
+
+def ratio (A : matrix (fin m) (fin n) ℚ) (c : rvec n) (b : cvec m)
+  (B : prebasis m n) (i : fin (n - m)) (j : fin m) : matrix (fin 1) (fin 1) ℚ :=
+((single 0 j).to_matrix ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ b) ⬝
+  inverse ((single 0 j).to_matrix ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A ⬝ B.nonbasis.to_matrixᵀ ⬝
+  (single i 0).to_matrix)
+
+local notation `.` := pequiv.to_matrix
+
+local postfix `⁻¹` := inverse
+
+lemma objective_function_swap_eq (A : matrix (fin m) (fin n) ℚ)
+  (c : rvec n) (b : cvec m) (B : prebasis m n) (i : fin (n - m)) (j : fin m) :
+  objective_function_of_prebasis A c b (B.swap j i) =
+  objective_function_of_prebasis A c b B + reduced_cost A c B i ⬝ ratio A c b B i j :=
+calc objective_function_of_prebasis A c b (B.swap j i)
+    = c ⬝ (B.swap j i).basis.to_matrixᵀ ⬝ inverse (A ⬝ (B.swap j i).basis.to_matrixᵀ) ⬝ b +
+      (c ⬝ (B.swap j i).nonbasis.to_matrixᵀ - c ⬝ (B.swap j i).basis.to_matrixᵀ ⬝
+        inverse (A ⬝ (B.swap j i).basis.to_matrixᵀ) ⬝ A ⬝ (B.swap j i).nonbasis.to_matrixᵀ) ⬝
+      (B.swap j i).nonbasis.to_matrix ⬝ ((B.swap j i).basis.to_matrixᵀ ⬝
+      inverse (A ⬝ (B.swap j i).basis.to_matrixᵀ) ⬝ b) :
+  begin
+    rw [objective_function_of_prebasis],
+    refine objective_function_eq A c b _ (B.swap j i) _ _,
+
+
+  end
+
+
+
+... = _ : _
+
+
+-- lemma basis_trans_nonbasis_eq_bot (B : prebasis m n) :
+--   B.basis.trans B.nonbasis.symm = ⊥ :=
+-- begin
+--   ext,
+--   dsimp [pequiv.trans], simp,
+
+-- end
+
+
+-- end prebasis
+
+-- def pivot (A : matrix (fin m) (fin n) ℚ) (c : rvec n) (b : cvec m)
+--   (B : array m (fin n))
+--   (NB : array (n - m) (fin n))
+--   (i : fin (n - m)) (j : fin m) :
+--   array m (fin n) × -- basis
+--   array (n - m) (fin n) × -- non basis
+--   matrix (fin m) (fin (n - m)) ℚ × -- A_bar
+--   (rvec m) × -- c_B
+--   (rvec (n - m)) × --c_N
+--   (cvec m) × --b_bar
+--   matrix (fin m) (fin m) ℚ -- pert
+--   :=
+-- let NBi : fin n := NB.read i in
+-- let Bj : fin n := B.read j in
+-- let NB' := NB.write i Bj in
+-- let B' := B.write j NBi in
+-- let A_B'_inverse := _root_.inverse (minor A id B'.read) in
+-- ⟨B',
+--   NB',
+--   A_B'_inverse ⬝ minor A id NB'.read,
+--   minor c id B'.read,
+--   minor c id NB'.read,
+--   A_B'_inverse ⬝ b,
+--   A_B'_inverse⟩
+
+-- /-- given a basis, such that A_B is invertible, `solution_of_basis` returns `x` such that `A ⬝ x = b`. -/
+-- def solution_of_basis (A : matrix (fin m) (fin n) ℚ) (b : cvec m) (B : prebasis m n) : cvec n :=
+-- minor 1 id B.1.nth ⬝ inverse (minor A id B.1.nth) ⬝ b
 
 local notation `£` := default _
 

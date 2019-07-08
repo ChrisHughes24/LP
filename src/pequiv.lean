@@ -1,17 +1,10 @@
 import data.equiv.basic data.set.lattice tactic.tauto
-
 universes u v w x
 
 structure pequiv (α : Type u) (β : Type v) :=
 (to_fun : α → option β)
 (inv_fun : β → option α)
 (inv : ∀ (a : α) (b : β), a ∈ inv_fun b ↔ b ∈ to_fun a)
-
-@[simp] lemma option.not_mem_none {α : Type*} (a : α) : a ∉ (none : option α) :=
-λ h, option.no_confusion h
-
-lemma option.bind_assoc {α β γ : Type*} (x : option α) (f : α → option β) (g : β → option γ) :
-  (x.bind f).bind g = x.bind (λ y, (f y).bind g) := by cases x; refl
 
 namespace pequiv
 variables {α : Type u} {β : Type v} {γ : Type w} {δ : Type x}
@@ -39,6 +32,9 @@ have ∀ b, f₂ b = g₂ b,
   end,
 by simp [*, funext_iff]
 
+lemma ext_iff {f g : pequiv α β} : f = g ↔ ∀ x, f x = g x :=
+⟨congr_fun ∘ congr_arg _, ext⟩
+
 @[refl] protected def refl (α : Type*) : pequiv α α :=
 { to_fun := some,
   inv_fun := some,
@@ -54,11 +50,11 @@ lemma mem_iff_mem (f : pequiv α β) : ∀ {a : α} {b : β}, a ∈ f.symm b ↔
 lemma eq_some_iff (f : pequiv α β) : ∀ {a : α} {b : β}, f.symm b = some a ↔ f a = some b := f.3
 
 @[trans] protected def trans (f : pequiv α β) (g : pequiv β γ) : pequiv α γ :=
-{ to_fun := λ a, option.bind (f a) g,
-  inv_fun := λ a, option.bind (g.symm a) f.symm,
+{ to_fun := λ a, (f a).bind g,
+  inv_fun := λ a, (g.symm a).bind f.symm,
   inv := λ a b, by simp [*, and.comm, eq_some_iff f, eq_some_iff g] at * }
 
-@[simp] lemma refl_apply (a : α) : (pequiv.refl α) a = some a := rfl
+@[simp] lemma refl_apply (a : α) : pequiv.refl α a = some a := rfl
 
 @[simp] lemma symm_refl : (pequiv.refl α).symm = pequiv.refl α := rfl
 
@@ -151,12 +147,7 @@ by ext; dsimp [of_set]; simp [eq_comm]
   intro,
   rw [← mem_of_set_self_iff, h],
   exact rfl
-end, λ h, begin
-  resetI,
-  subst h,
-  rw ← of_set_univ,
-  congr,
-end⟩
+end, λ h, by simp only [of_set_univ.symm, h]; congr⟩
 
 end of_set
 
@@ -166,8 +157,7 @@ lemma trans_symm (f : pequiv α β) : f.trans f.symm = of_set {a | (f a).is_some
 begin
   ext,
   dsimp [pequiv.trans],
-  simp only [eq_some_iff f, option.is_some_iff_exists, option.mem_def, bind_eq_some',
-    of_set_eq_some_iff],
+  simp only [eq_some_iff f, option.is_some_iff_exists, option.mem_def, bind_eq_some', of_set_eq_some_iff],
   split,
   { rintros ⟨b, hb₁, hb₂⟩,
     exact ⟨pequiv.inj _ hb₂ hb₁, b, hb₂⟩ },
@@ -177,19 +167,99 @@ end
 lemma symm_trans (f : pequiv α β) : f.symm.trans f = of_set {b | (f.symm b).is_some} :=
 symm_injective $ by simp [symm_trans_rev, trans_symm, -symm_symm]
 
-lemma trans_symm_eq_iff_forall_mem {f : pequiv α β} : f.trans f.symm = pequiv.refl α ↔
-  ∀ a, is_some (f a) :=
+lemma trans_symm_eq_iff_forall_is_some {f : pequiv α β} :
+  f.trans f.symm = pequiv.refl α ↔ ∀ a, is_some (f a) :=
 by rw [trans_symm, of_set_eq_refl, set.eq_univ_iff_forall]; refl
 
-section single
+instance : lattice.has_bot (pequiv α β) :=
+⟨{ to_fun := λ _, none,
+   inv_fun := λ _, none,
+   inv := by simp }⟩
+
+@[simp] lemma bot_apply (a : α) : (⊥ : pequiv α β) a = none := rfl
+
+@[simp] lemma symm_bot : (⊥ : pequiv α β).symm = ⊥ := rfl
+
+@[simp] lemma trans_bot (f : pequiv α β) : f.trans (⊥ : pequiv β γ) = ⊥ :=
+by ext; dsimp [pequiv.trans]; simp
+
+@[simp] lemma bot_trans (f : pequiv β γ) : (⊥ : pequiv α β).trans f = ⊥ :=
+by ext; dsimp [pequiv.trans]; simp
+
+lemma is_some_symm_get (f : pequiv α β) {a : α} (h : is_some (f a)) :
+  is_some (f.symm (option.get h)) :=
+is_some_iff_exists.2 ⟨a, by rw [f.eq_some_iff, some_get]⟩
+
+section subsingle
 variables [decidable_eq α] [decidable_eq β]
+
+def subsingle (x : option (α × β)) : pequiv α β :=
+{ to_fun := λ y, option.bind x (λ z, if y = z.1 then some z.2 else none),
+  inv_fun := λ y, option.bind x (λ z, if y = z.2 then some z.1 else none),
+  inv := λ _ _, by rcases x with ⟨a, b⟩ | none; simp; split_ifs; cc }
+
+@[simp] lemma symm_subsingle (x : option (α × β)) : (subsingle x).symm = subsingle (x.map prod.swap) :=
+by rcases x with ⟨a, b⟩ | none; refl
+
+@[simp] lemma mem_subsingle {a : α} {b : β} {x : option (α × β)} : b ∈ subsingle x a ↔ (a, b) ∈ x :=
+by rcases x with none | ⟨x₁, x₂⟩; dsimp [subsingle]; try {split_ifs}; simp; cc
+
+end subsingle
+
+section single
+variables [decidable_eq α] [decidable_eq β] [decidable_eq γ]
 
 def single (a : α) (b : β) : pequiv α β :=
 { to_fun := λ x, if x = a then some b else none,
   inv_fun := λ x, if x = b then some a else none,
-  inv := λ _ _, by split_ifs; simp [*, eq_comm]; cc }
+  inv := λ _ _, by simp; split_ifs; cc }
 
-@[simp] lemma symm_single (a : α) (b : β) : (single a b).symm = single b a := rfl
+@[simp] lemma symm_single (a : α) (b : α) : (single a b).symm = single b a := rfl
+
+lemma single_trans_of_mem (a : α) {b : β} {c : γ} {f : pequiv β γ} (h : c ∈ f b) :
+  (single a b).trans f = single a c :=
+begin
+  ext,
+  dsimp [single, subsingle, pequiv.trans],
+  split_ifs; simp * at *
+end
+
+lemma trans_single_of_mem {a : α} {b : β} (c : γ) {f : pequiv α β} (h : b ∈ f a) :
+  f.trans (single b c) = single a c :=
+symm_injective $ single_trans_of_mem _ ((mem_iff_mem f).2 h)
+
+lemma trans_single_of_eq_none {b : β} (c : γ) {f : pequiv α β} (h : f.symm b = none) :
+  f.trans (single b c) = ⊥ :=
+begin
+  ext,
+  simp only [eq_none_iff_forall_not_mem, option.mem_def, f.eq_some_iff] at h,
+  dsimp [pequiv.trans, single],
+  simp,
+  intros,
+  split_ifs;
+  simp * at *
+end
+
+lemma single_trans_of_eq_none (a : α) {b : β} {f : pequiv β γ} (h : f b = none) :
+  (single a b).trans f = ⊥ :=
+symm_injective $ trans_single_of_eq_none _ h
+
+lemma single_trans (a : α) (b : β) (f : pequiv β γ) : (single a b).trans f =
+  subsingle ((f b).map (prod.mk a)) :=
+begin
+  ext c d,
+  dsimp [single, subsingle, pequiv.trans],
+  split_ifs;
+  cases h : f b;
+  simp *
+end
+
+lemma option.map_map (f : α → β) (g : β → γ) (o : option α) : (o.map f).map g = o.map (g ∘ f) :=
+by cases o; refl
+
+lemma trans_single (b : β) (c : γ) (f : pequiv α β) : f.trans (single b c) =
+  subsingle ((f.symm b).map (λ a, (a, c))) :=
+symm_injective $ by rw [symm_subsingle, option.map_map]; exact single_trans _ _ _
 
 end single
 
@@ -209,21 +279,6 @@ instance : partial_order (pequiv α β) :=
   end }
 
 lemma le_def {f g : pequiv α β} : f ≤ g ↔ (∀ (a : α) (b : β), b ∈ f a → b ∈ g a) := iff.rfl
-
-instance : has_bot (pequiv α β) :=
-⟨{ to_fun := λ _, none,
-   inv_fun := λ _, none,
-   inv := by simp }⟩
-
-@[simp] lemma bot_apply (a : α) : (⊥ : pequiv α β) a = none := rfl
-
-@[simp] lemma symm_bot : (⊥ : pequiv α β).symm = ⊥ := rfl
-
-@[simp] lemma trans_bot (f : pequiv α β) : f.trans (⊥ : pequiv β γ) = ⊥ :=
-by ext; dsimp [pequiv.trans]; simp
-
-@[simp] lemma bot_trans (f : pequiv β γ) : (⊥ : pequiv α β).trans f = ⊥ :=
-by ext; dsimp [pequiv.trans]; simp
 
 instance : order_bot (pequiv α β) :=
 { bot_le := λ _ _  _ h, (not_mem_none _ h).elim,
@@ -251,6 +306,7 @@ instance [decidable_eq α] [decidable_eq β] : semilattice_inf_bot (pequiv α β
 
 end order
 
+
 end pequiv
 
 namespace equiv
@@ -268,4 +324,28 @@ lemma to_pequiv_trans (f : α ≃ β) (g : β ≃ γ) : (f.trans g).to_pequiv =
 
 lemma to_pequiv_symm (f : α ≃ β) : f.symm.to_pequiv = f.to_pequiv.symm := rfl
 
+def option_to_pequiv (f : option α ≃ option β) : pequiv α β :=
+{ to_fun := f ∘ some,
+  inv_fun := f.symm ∘ some,
+  inv := by simp [equiv.eq_symm_apply, eq_comm] }
+
+@[simp] lemma option_to_pequiv_refl : (equiv.refl (option α)).option_to_pequiv = pequiv.refl α := rfl
+
+lemma option_to_pequiv_trans (f : option α ≃ option β) (g : option β ≃ option γ) : (f.trans g).to_pequiv =
+  f.to_pequiv.trans g.to_pequiv := rfl
 end equiv
+
+variables {α : Type*} {β : Type*} [decidable_eq α] [decidable_eq β]
+
+lemma swap_trans (a₁ a₂ : α) (f : pequiv α β) :
+  (equiv.swap a₁ a₂).to_pequiv.trans f = f.trans (equiv.swap (f a₁) (f a₂)).option_to_pequiv :=
+begin
+  ext,
+  dsimp [pequiv.trans, equiv.to_pequiv, equiv.swap_apply_def, equiv.option_to_pequiv,
+    equiv.swap_apply_def, function.comp],
+  simp,
+  split_ifs,
+  { cases hx : f x,
+    simp *, }
+
+end
