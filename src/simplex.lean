@@ -428,6 +428,12 @@ lemma has_left_inverse_swap {A : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
   (A ⬝ (B.swap r s).basis.to_matrixᵀ).has_left_inverse :=
 ⟨_, swap_mul_swap_inverse' hAB h⟩
 
+lemma inverse_swap_eq' {A_bar : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
+  {r : fin m} {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
+  (h : pivot_element A_bar B r s ≠ 0) :
+  inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) = swap_inverse A_bar B r s :=
+sorry
+
 lemma inverse_swap_eq {A : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
   {r : fin m} {s : fin (n - m)} (hAB : (A ⬝ B.basis.to_matrixᵀ).has_left_inverse)
   (h : pivot_element (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A) B r s ≠ 0) :
@@ -492,12 +498,12 @@ lemma solution_of_basis_eq_adjust (A_bar : matrix (fin m) (fin n) ℚ) (B : preb
   (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) (r : fin m) (s : fin (n - m))
   (hpivot : pivot_element A_bar B r s ≠ 0) :
   (B.swap r s).basis.to_matrixᵀ ⬝ inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) ⬝ b_bar =
-  adjust A_bar B b_bar (inverse (pivot_element A_bar B r s)) s :=
+  adjust A_bar B b_bar (ratio A_bar b_bar B r s) s :=
 -- It suffices to prove they are equal after left multiplication by `A_bar` and by `B.nonbasis.to_matrix`
 suffices A_bar ⬝ (B.swap r s).basis.to_matrixᵀ ⬝ inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) ⬝ b_bar =
-    A_bar ⬝ adjust A_bar B b_bar (inverse (pivot_element A_bar B r s)) s ∧
+    A_bar ⬝ adjust A_bar B b_bar (ratio A_bar b_bar B r s) s ∧
     B.nonbasis.to_matrix ⬝ (B.swap r s).basis.to_matrixᵀ ⬝ inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) ⬝ b_bar =
-    B.nonbasis.to_matrix ⬝ adjust A_bar B b_bar (inverse (pivot_element A_bar B r s)) s,
+    B.nonbasis.to_matrix ⬝ adjust A_bar B b_bar (ratio A_bar b_bar B r s) s,
   begin
     rw [← matrix.mul_left_inj ⟨_, mul_eq_one_comm.1
       (basis_transpose_add_nonbasis_transpose_mul_nonbasis A_bar B hA_bar)⟩, matrix.add_mul,
@@ -508,14 +514,24 @@ suffices A_bar ⬝ (B.swap r s).basis.to_matrixᵀ ⬝ inverse (A_bar ⬝ (B.swa
 ⟨by rw [adjust_is_solution _ _ _ _ _ hA_bar,
     matrix.mul_inverse (has_right_inverse_iff_has_left_inverse.1 (has_left_inverse_swap' hA_bar hpivot)),
     matrix.one_mul],
+have (single s r).to_matrix ⬝ (A_bar ⬝ (B.nonbasis.to_matrixᵀ ⬝ ((single s (0 : fin 1)).to_matrix ⬝
+  ((single 0 r).to_matrix ⬝ ((single r 0).to_matrix ⬝ (inverse (pivot_element A_bar B r s) ⬝
+  ((single 0 r).to_matrix ⬝ b_bar))))))) = (single s (0 : fin 1)).to_matrix ⬝ (single 0 r).to_matrix ⬝ b_bar,
+  begin
+    simp only [pivot_element, mul_right_eq_of_mul_eq (single_mul_single _ _ _)],
+    rw [← single_mul_single s (0 : fin 1) r],
+    simp only [(matrix.mul_assoc _ _ _).symm],
+    simp only [(single s (0 : fin 1)).to_matrix.mul_assoc],
+    rw [one_by_one_mul_inv_cancel, matrix.one_mul],
+    { simpa [pivot.matrix.mul_assoc] using hpivot }
+  end,
 begin
   simp only [adjust, matrix.mul_add, zero_add, sub_eq_add_neg, matrix.neg_mul,
     mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose _), matrix.zero_mul,
     nonbasis_mul_swap_basis_tranpose, matrix.mul_assoc, matrix.add_mul, matrix.mul_neg,
     mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose _), matrix.one_mul, neg_zero,
-    add_zero, pivot_element, inverse_swap_eq'],
-
-
+    add_zero, inverse_swap_eq' hA_bar hpivot, swap_inverse, ratio, this],
+  simp
 end⟩
 
 
