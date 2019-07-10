@@ -1,12 +1,13 @@
-import data.matrix data.finsupp tactic.fin_cases linear_algebra.basic
+import data.matrix tactic.fin_cases linear_algebra.determinant
 
 local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := matrix.transpose
 
 universes u v w
 
-section matrix
+namespace matrix
 
+section
 variables {l m n o : Type u} [fintype l] [fintype m] [fintype n] [fintype o]
 variables {one : Type u} [unique one]
 
@@ -29,111 +30,126 @@ matrix.ext (λ i j, by fin_cases j; exact h _)
  (h : ∀ j, x £ j = y £ j) : x = y :=
 matrix.ext (λ i j, by fin_cases i; exact h _)
 
-def column (one : Type u) [unique one] (j : n) : matrix m one R := λ i _, A i j
-def row' (one : Type u) [unique one] (i : m) : matrix one n R := λ _ j, A i j
-
 /-- the same as row free if `R` is a field -/
-def matrix.has_right_inverse [ring R] [decidable_eq m] (M : matrix m n R) : Prop :=
+def has_right_inverse [ring R] [decidable_eq m] (M : matrix m n R) : Prop :=
 ∃ N : matrix n m R, M ⬝ N = 1
 
 /-- the same as column free if `R` is a field -/
-def matrix.has_left_inverse [ring R] [decidable_eq n] (M : matrix m n R) : Prop :=
+def has_left_inverse [ring R] [decidable_eq n] (M : matrix m n R) : Prop :=
 ∃ N : matrix n m R, N ⬝ M = 1
 
-open matrix
+lemma has_left_inverse_one [ring R] [decidable_eq n] : (1 : matrix n n R).has_left_inverse :=
+⟨1, matrix.one_mul 1⟩
 
-lemma minor_mul [ring R] (M : matrix m n R) (N : matrix n o R) (row : l → m) :
-  minor M row id ⬝ N = minor (M ⬝ N) row id := rfl
+lemma has_right_inverse_one [ring R] [decidable_eq n] : (1 : matrix n n R).has_right_inverse :=
+⟨1, matrix.one_mul 1⟩
 
-lemma mul_minor [ring R] {M : matrix m n R} {N : matrix n l R} (col : o → l) :
-  M ⬝ minor N id col = minor (M ⬝ N) id col := rfl
+lemma has_right_inverse_iff_has_left_inverse [integral_domain R] [decidable_eq n]
+  {M : matrix n n R} : has_left_inverse M ↔ has_right_inverse M := sorry
 
-lemma minor_eq_mul_minor_one [ring R] [decidable_eq m] [decidable_eq n] (M : matrix m n R)
-  (row : l → m) : minor M row id = minor 1 row id ⬝ M :=
-by rw [minor_mul, M.one_mul]
+lemma mul_right_inj [ring R] [decidable_eq m] {L M : matrix l m R} {N : matrix m n R}
+  (hN : N.has_right_inverse) : L ⬝ N = M ⬝ N ↔ L = M :=
+let ⟨I, hI⟩ := hN in
+⟨λ h, by rw [← L.mul_one, ← hI, ← matrix.mul_assoc, h, matrix.mul_assoc, hI, matrix.mul_one],
+  λ h, by rw h⟩
 
-lemma minor_eq_minor_one_mul [ring R] [decidable_eq m] [decidable_eq n] (M : matrix m n R)
-  (col : o → n) : minor M id col = M ⬝ minor 1 id col :=
-by rw [mul_minor, M.mul_one]
+lemma mul_left_inj [ring R] [decidable_eq m] {L : matrix l m R} {M N : matrix m n R}
+  (hL : L.has_left_inverse) : L ⬝ M = L ⬝ N ↔ M = N :=
+let ⟨I, hI⟩ := hL in
+⟨λ h, by rw [← M.one_mul, ← hI, matrix.mul_assoc, h, ← matrix.mul_assoc, hI, matrix.one_mul],
+  λ h, by rw h⟩
+-- lemma minor_mul [ring R] (M : matrix m n R) (N : matrix n o R) (row : l → m) :
+--   minor M row id ⬝ N = minor (M ⬝ N) row id := rfl
 
-lemma transpose_diagonal [has_zero R] [decidable_eq n] (d : n → R) :
-  (diagonal d)ᵀ = diagonal d :=
-by ext; dsimp [diagonal, transpose]; split_ifs; cc
+-- lemma mul_minor [ring R] {M : matrix m n R} {N : matrix n l R} (col : o → l) :
+--   M ⬝ minor N id col = minor (M ⬝ N) id col := rfl
 
-@[simp] lemma transpose_one [has_zero R] [has_one R] [decidable_eq n] :
-  (1 : matrix n n R)ᵀ = 1 := transpose_diagonal _
+-- lemma minor_eq_mul_minor_one [ring R] [decidable_eq m] [decidable_eq n] (M : matrix m n R)
+--   (row : l → m) : minor M row id = minor 1 row id ⬝ M :=
+-- by rw [minor_mul, M.one_mul]
 
-lemma transpose_minor [ring R] [decidable_eq m] [decidable_eq n] (M : matrix m n R)
-  (row : l → m) (col : o → n) : (minor M row col)ᵀ = minor Mᵀ col row := rfl
+-- lemma minor_eq_minor_one_mul [ring R] [decidable_eq m] [decidable_eq n] (M : matrix m n R)
+--   (col : o → n) : minor M id col = M ⬝ minor 1 id col :=
+-- by rw [mul_minor, M.mul_one]
 
-lemma minor_minor {k l m n o p : Type u} [fintype k] [fintype l] [fintype m] [fintype n]
-  [fintype o] [fintype p] (M : matrix m n R)
-  (row₁ : l → m) (row₂ : k → l) (col₁ : o → n) (col₂ : p → o) :
-  minor (minor M row₁ col₁) row₂ col₂ = minor M (row₁ ∘ row₂) (col₁ ∘ col₂) := rfl
+-- lemma transpose_diagonal [has_zero R] [decidable_eq n] (d : n → R) :
+--   (diagonal d)ᵀ = diagonal d :=
+-- by ext; dsimp [diagonal, transpose]; split_ifs; cc
 
-lemma minor_diagonal_eq_diagonal [has_zero R] [decidable_eq m] [decidable_eq n]
-  {f : m → n} (hf : injective f) (d : n → R) : minor (diagonal d) f f = diagonal (d ∘ f) :=
-by ext; simp [diagonal, minor, hf.eq_iff]; congr
+-- @[simp] lemma transpose_one [has_zero R] [has_one R] [decidable_eq n] :
+--   (1 : matrix n n R)ᵀ = 1 := transpose_diagonal _
 
-lemma minor_one_eq_one [has_zero R] [has_one R] [decidable_eq m] [decidable_eq n]
-  {f : m → n} (hf : injective f) : minor (1 : matrix n n R) f f = 1 :=
-minor_diagonal_eq_diagonal hf _
+-- lemma transpose_minor [ring R] [decidable_eq m] [decidable_eq n] (M : matrix m n R)
+--   (row : l → m) (col : o → n) : (minor M row col)ᵀ = minor Mᵀ col row := rfl
 
-open finset
+-- lemma minor_minor {k l m n o p : Type u} [fintype k] [fintype l] [fintype m] [fintype n]
+--   [fintype o] [fintype p] (M : matrix m n R)
+--   (row₁ : l → m) (row₂ : k → l) (col₁ : o → n) (col₂ : p → o) :
+--   minor (minor M row₁ col₁) row₂ col₂ = minor M (row₁ ∘ row₂) (col₁ ∘ col₂) := rfl
 
-lemma minor_one_mul_transpose_eq_one [ring R] [decidable_eq n] [decidable_eq m] {f : m → n}
-  (hf : injective f) : minor (1 : matrix n n R) f id ⬝ (minor 1 f id)ᵀ = 1 :=
-by rw [minor_mul, transpose_minor, mul_minor, transpose_one, matrix.one_mul, minor_minor];
-  exact minor_one_eq_one hf
+-- lemma minor_diagonal_eq_diagonal [has_zero R] [decidable_eq m] [decidable_eq n]
+--   {f : m → n} (hf : injective f) (d : n → R) : minor (diagonal d) f f = diagonal (d ∘ f) :=
+-- by ext; simp [diagonal, minor, hf.eq_iff]; congr
 
-lemma transpose_mul_minor_one_eq_diagonal [ring R] [decidable_eq n] [decidable_eq m] {f : m → n}
-  (hf : injective f) : (minor (1 : matrix n n R) f id)ᵀ ⬝ (minor (1 : matrix n n R) f id) =
-  diagonal (λ i, if i ∈ set.range f then 1 else 0) :=
-begin
-  ext i j,
-  dsimp [transpose_minor, transpose_one, minor, minor, matrix.mul, diagonal, transpose, one_val],
-  by_cases hi : i ∈ set.range f,
-  { cases id hi with k hk,
-    rw [sum_eq_single k];
-    simp [hk.symm, hi, -set.mem_range, hf.eq_iff] {contextual := tt}; try {congr} },
-  { rw [sum_eq_zero, if_neg hi]; simp * at * }
-end
+-- lemma minor_one_eq_one [has_zero R] [has_one R] [decidable_eq m] [decidable_eq n]
+--   {f : m → n} (hf : injective f) : minor (1 : matrix n n R) f f = 1 :=
+-- minor_diagonal_eq_diagonal hf _
 
-lemma transpose_mul_minor_one_eq_diagonal [ring R] [decidable_eq n] [decidable_eq m]
-  {f : m → n} {g : l → n} (hf : injective f) (hg : injective g) :
-  (minor (1 : matrix n n R) f id) ⬝ (minor (1 : matrix n n R) g id)ᵀ =
-  diagonal (λ i, if i ∈ set.range f then 1 else 0) :=
+-- open finset
+
+-- lemma minor_one_mul_transpose_eq_one [ring R] [decidable_eq n] [decidable_eq m] {f : m → n}
+--   (hf : injective f) : minor (1 : matrix n n R) f id ⬝ (minor 1 f id)ᵀ = 1 :=
+-- by rw [minor_mul, transpose_minor, mul_minor, transpose_one, matrix.one_mul, minor_minor];
+--   exact minor_one_eq_one hf
+
+-- lemma transpose_mul_minor_one_eq_diagonal [ring R] [decidable_eq n] [decidable_eq m] {f : m → n}
+--   (hf : injective f) : (minor (1 : matrix n n R) f id)ᵀ ⬝ (minor (1 : matrix n n R) f id) =
+--   diagonal (λ i, if i ∈ set.range f then 1 else 0) :=
+-- begin
+--   ext i j,
+--   dsimp [transpose_minor, transpose_one, minor, minor, matrix.mul, diagonal, transpose, one_val],
+--   by_cases hi : i ∈ set.range f,
+--   { cases id hi with k hk,
+--     rw [sum_eq_single k];
+--     simp [hk.symm, hi, -set.mem_range, hf.eq_iff] {contextual := tt}; try {congr} },
+--   { rw [sum_eq_zero, if_neg hi]; simp * at * }
+-- end
+
+-- lemma transpose_mul_minor_one_eq_diagonal [ring R] [decidable_eq n] [decidable_eq m]
+--   {f : m → n} {g : l → n} (hf : injective f) (hg : injective g) :
+--   (minor (1 : matrix n n R) f id) ⬝ (minor (1 : matrix n n R) g id)ᵀ =
+--   diagonal (λ i, if i ∈ set.range f then 1 else 0) :=
 
 
-lemma tranpose_mul_minor_one_add_transpose_mul_minor_one
-  [ring R] [decidable_eq l] [decidable_eq m] [decidable_eq n] {f : m → n} {g : l → n}
-  (hf : injective f) (hg : injective g) (hfg : ∀ i, i ∈ set.range f ∪ set.range g)
-  (hd : disjoint (set.range f) (set.range g)):
-  (minor (1 : matrix n n R) f id)ᵀ ⬝ (minor (1 : matrix n n R) f id) +
-  (minor (1 : matrix n n R) g id)ᵀ ⬝ (minor (1 : matrix n n R) g id) = 1 :=
-matrix.ext $ λ i j, begin
-  have : i ∈ set.range f → i ∈ set.range g → false,
-    from λ hf hg, set.disjoint_iff.1 hd ⟨hf, hg⟩,
-  have := hfg i,
-  rw [transpose_mul_minor_one_eq_diagonal hf, transpose_mul_minor_one_eq_diagonal hg,
-    diagonal_add, diagonal],
-  dsimp only,
-  split_ifs;
-  simp * at *
-end
+-- lemma tranpose_mul_minor_one_add_transpose_mul_minor_one
+--   [ring R] [decidable_eq l] [decidable_eq m] [decidable_eq n] {f : m → n} {g : l → n}
+--   (hf : injective f) (hg : injective g) (hfg : ∀ i, i ∈ set.range f ∪ set.range g)
+--   (hd : disjoint (set.range f) (set.range g)):
+--   (minor (1 : matrix n n R) f id)ᵀ ⬝ (minor (1 : matrix n n R) f id) +
+--   (minor (1 : matrix n n R) g id)ᵀ ⬝ (minor (1 : matrix n n R) g id) = 1 :=
+-- matrix.ext $ λ i j, begin
+--   have : i ∈ set.range f → i ∈ set.range g → false,
+--     from λ hf hg, set.disjoint_iff.1 hd ⟨hf, hg⟩,
+--   have := hfg i,
+--   rw [transpose_mul_minor_one_eq_diagonal hf, transpose_mul_minor_one_eq_diagonal hg,
+--     diagonal_add, diagonal],
+--   dsimp only,
+--   split_ifs;
+--   simp * at *
+-- end
 
-local attribute [instance] finsupp.add_comm_group finsupp.module
+-- local attribute [instance] finsupp.add_comm_group finsupp.module
 
-def finsupp_equiv_cvec [ring R] [decidable_eq R] [decidable_eq m] :
-  (m →₀ R) ≃ₗ[R] matrix m one R :=
-{ to_fun := λ x i _, x i,
-  inv_fun := λ v, finsupp.equiv_fun_on_fintype.2 (λ i, v i £),
-  left_inv := λ _, finsupp.ext (λ _, rfl),
-  right_inv := λ _, cvec.ext (λ _, rfl),
-  add := λ x y, rfl,
-  smul := λ c x, rfl }
+-- def finsupp_equiv_cvec [ring R] [decidable_eq R] [decidable_eq m] :
+--   (m →₀ R) ≃ₗ[R] matrix m one R :=
+-- { to_fun := λ x i _, x i,
+--   inv_fun := λ v, finsupp.equiv_fun_on_fintype.2 (λ i, v i £),
+--   left_inv := λ _, finsupp.ext (λ _, rfl),
+--   right_inv := λ _, cvec.ext (λ _, rfl),
+--   add := λ x y, rfl,
+--   smul := λ c x, rfl }
 
-def matrix.to_lin' (one : Type u) [unique one] [comm_ring R] (A : matrix m n R) :
+def to_lin' (one : Type u) [unique one] [comm_ring R] (A : matrix m n R) :
   matrix n one R →ₗ[R] matrix m one R :=
 { to_fun := (⬝) A,
   add := matrix.mul_add _,
@@ -156,10 +172,10 @@ lemma one_by_one_equiv.is_ring_hom (one R : Type*) [unique one] [decidable_eq on
   map_add := λ _ _, rfl,
   map_mul := λ _ _, by dsimp [one_by_one_equiv, matrix.mul]; simp }
 
-def one_by_one_ring_equiv (one R : Type*) [unique one] [ring R] [decidable_eq one] :
-  matrix one one R ≃r R :=
-{ hom := one_by_one_equiv.is_ring_hom one R,
-  ..one_by_one_equiv one R }
+-- def one_by_one_ring_equiv (one R : Type*) [unique one] [ring R] [decidable_eq one] :
+--   matrix one one R ≃r R :=
+-- { hom := one_by_one_equiv.is_ring_hom one R,
+--   ..one_by_one_equiv one R }
 
 
 section matrix_order
@@ -180,7 +196,65 @@ def matrix.decidable_le [partial_order α] [decidable_rel ((≤) : α → α →
 
 end matrix_order
 
+lemma mul_right_eq_of_mul_eq [ring R] {M : matrix l m R} {N : matrix m n R} {O : matrix l n R}
+  {P : matrix n o R} (h : M ⬝ N = O) : M ⬝ (N ⬝ P) = O ⬝ P :=
+by classical; rw [← matrix.mul_assoc, h]
+
+end
+
+
+section inverse
+variables {m n : ℕ} {}
+
+def comatrix (M : matrix (fin n) (fin n) ℚ) : matrix (fin n) (fin n) ℚ :=
+begin
+  cases n,
+  { exact fin.elim0 },
+  { exact λ i j, (-1) ^ (i + j : ℕ) * det (minor M
+      (λ i' : fin n, if i'.1 < i.1 then i'.cast_succ
+        else i'.succ)
+      (λ j' : fin n, if j'.1 < j.1 then j'.cast_succ
+        else j'.succ)) }
+end
+
+def inverse (M : matrix (fin m) (fin n) ℚ) : matrix (fin n) (fin m) ℚ :=
+if h : m = n then by subst h; exact (det M)⁻¹ • (comatrix M)ᵀ else 0
+#eval inverse (λ i j : fin 1, 0) 0 0
+/-- false with current inverse definition. True when `M` is square -/
+lemma inverse_mul {M : matrix (fin m) (fin n) ℚ} (h : M.has_left_inverse) :
+  inverse M ⬝ M = 1 := sorry
+
+/-- false with current inverse definition. True when `M` is square -/
+lemma mul_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_right_inverse) :
+  M ⬝ inverse M = 1 := sorry
+
+@[simp] lemma inverse_one : inverse (1 : matrix (fin n) (fin n) ℚ) = 1 := sorry
+
+lemma mul_eq_one_comm {M N : matrix (fin n) (fin n) ℚ} :
+  M ⬝ N = 1 ↔ N ⬝ M = 1 := sorry
+
+instance : discrete_field (matrix (fin 1) (fin 1) ℚ) :=
+{ inv := inverse,
+  zero_ne_one := mt (matrix.ext_iff).2 (λ h, absurd (h 0 0) dec_trivial),
+  mul_inv_cancel := sorry,
+  inv_mul_cancel := sorry,
+  has_decidable_eq := by apply_instance,
+  mul_comm := sorry,
+  inv_zero := dec_trivial,
+  ..matrix.ring }
+
+lemma one_by_one_mul_inv_cancel {M : matrix (fin 1) (fin 1) ℚ} (hM : M ≠ 0) :
+  M ⬝ inverse M = 1 := sorry
+
+lemma one_by_one_inv_mul_cancel {M : matrix (fin 1) (fin 1) ℚ} (hM : M ≠ 0) :
+  inverse M ⬝ M = 1 := sorry
+
+end inverse
+
 end matrix
+
+
+
 
 section lex
 

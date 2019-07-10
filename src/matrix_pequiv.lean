@@ -23,15 +23,34 @@ by ext; simp only [transpose, mem_iff_mem f, to_matrix]; congr
 @[simp] lemma to_matrix_refl [has_one R] [has_zero R] : ((pequiv.refl n).to_matrix : matrix n n R) = 1 :=
 by ext; simp [to_matrix, one_val]; congr
 
+lemma mul_matrix_apply [semiring R] (f : pequiv m n) (M : matrix n o R) (i j) :
+  (f.to_matrix ⬝ M) i j = option.cases_on (f i) 0 (λ fi, M fi j) :=
+begin
+  dsimp [to_matrix, matrix.mul],
+  cases h : f i with fi,
+  { simp [h] },
+  { rw finset.sum_eq_single fi;
+    simp [h, eq_comm] {contextual := tt} }
+end
+
+lemma matrix_mul_apply [semiring R] (M : matrix m n R) (f : pequiv n o) (i j) :
+  (M ⬝ f.to_matrix) i j = option.cases_on (f.symm j) 0 (λ fj, M i fj) :=
+begin
+  dsimp [to_matrix, matrix.mul],
+  cases h : f.symm j with fj,
+  { simp [h, f.eq_some_iff.symm] },
+  { conv in (_ ∈ _) { rw ← f.mem_iff_mem },
+    rw finset.sum_eq_single fj;
+    simp [h, eq_comm] {contextual := tt} }
+end
+
 lemma to_matrix_trans [semiring R] (f : pequiv m n) (g : pequiv n o) :
   ((f.trans g).to_matrix : matrix m o R) = f.to_matrix ⬝ g.to_matrix :=
 begin
   ext i j,
-  dsimp [to_matrix, matrix.mul, pequiv.trans],
-  cases h : f i with i',
-  { simp [h] },
-  { rw finset.sum_eq_single i';
-    simp [h, eq_comm] {contextual := tt} }
+  rw [mul_matrix_apply],
+  dsimp [to_matrix, pequiv.trans],
+  cases f i; simp
 end
 
 @[simp] lemma to_matrix_bot [has_one R] [has_zero R] : ((⊥ : pequiv m n).to_matrix : matrix m n R) = 0 := rfl
@@ -58,5 +77,17 @@ begin
   dsimp [to_matrix, single, equiv.swap_apply_def, equiv.to_pequiv, one_val],
   split_ifs; simp * at *
 end
+
+@[simp] lemma single_mul_single [ring R] (a : m) (b : n) (c : k) :
+  ((single a b).to_matrix : matrix _ _ R) ⬝ (single b c).to_matrix = (single a c).to_matrix :=
+by rw [← to_matrix_trans, single_trans_single]
+
+lemma single_mul_single_of_ne [ring R] {b₁ b₂ : n} (hb : b₁ ≠ b₂) (a : m) (c : k) :
+  ((single a b₁).to_matrix : matrix _ _ R) ⬝ (single b₂ c).to_matrix = 0 :=
+by rw [← to_matrix_trans, single_trans_single_of_ne hb, to_matrix_bot]
+
+@[simp] lemma single_mul_single_right [ring R] (a :  m) (b : n) (c : k)
+  (M : matrix k l R) : (single a b).to_matrix ⬝ ((single b c).to_matrix ⬝ M) = (single a c).to_matrix ⬝ M :=
+by rw [← matrix.mul_assoc, single_mul_single]
 
 end pequiv
