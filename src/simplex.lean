@@ -1,12 +1,11 @@
 import data.matrix data.rat.basic
-import linear_algebra.determinant .misc
+import linear_algebra.determinant .misc tactic.fin_cases
 import .list_sup .fin_find
 import .matrix_pequiv
 
 open matrix fintype finset function
 
 variables {m n : ℕ}
-variables (A : matrix (fin m) (fin n) ℚ)
 
 local notation `rvec`:2000 n := matrix (fin 1) (fin n) ℚ
 local notation `cvec`:2000 m := matrix (fin m) (fin 1) ℚ
@@ -27,71 +26,46 @@ local attribute [instance] cvec.ordered_comm_group
 def cvec.decidable_le : decidable_rel ((≤) : (cvec n) → (cvec n) → Prop) :=
 matrix.decidable_le
 
-local attribute [instance] cvec.decidable_le
+local attribute [instance] matrix.ordered_comm_group matrix.decidable_le
+open pequiv
 
---instance : partial_order (matrix (fin m) (fin n) ℚ) := pi.partial_order
+instance : discrete_linear_ordered_field (cvec 1) :=
+{ mul_nonneg := sorry,
+  mul_pos := sorry,
+  le_total := sorry,
+  zero_lt_one := sorry,
+  lt := (<),
+  decidable_le := cvec.decidable_le,
+  ..matrix.discrete_field,
+  ..cvec.ordered_comm_group }
 
 local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := transpose
 
-def is_feasible (x : cvec n) : Prop :=
-0 ≤ x ∧ A ⬝ x = b
-
-instance (x : cvec n) : decidable (is_feasible A b x) :=
-by dunfold is_feasible; apply_instance
-
-def is_optimal (x : cvec n) : Prop :=
-is_feasible A b x ∧ ∀ y, is_feasible A b y → cᵀ ⬝ y ≤ cᵀ ⬝ x
-
-def is_invertible' (M : matrix (fin m) (fin n) ℚ) : Prop :=
-∃ h : m = n, by rw h at M; exact det M ≠ 0
-
-instance is_invertible'.decidable : decidable_pred (@is_invertible' m n) :=
-λ _, by unfold is_invertible'; apply_instance
+lemma cvec_le_iff (a b : cvec n) : a ≤ b ↔
+  (∀ i : fin n, (single (0 : fin 1) i).to_matrix ⬝ a ≤ (single 0 i).to_matrix ⬝ b) :=
+show (∀ i j, a i j ≤ b i j) ↔
+  (∀ i j k, ((single (0 : fin 1) i).to_matrix ⬝ a) j k ≤ ((single 0 i).to_matrix ⬝ b) j k),
+begin
+  simp only [mul_matrix_apply],
+  split,
+  { intros h i j k,
+    fin_cases j, fin_cases k,
+    exact h _ _ },
+  { intros h i j,
+    fin_cases j,
+    exact h i 0 0 }
+end
 
 def rvec.to_list {n : ℕ} (x : rvec n) : list ℚ :=
 (vector.of_fn (x 0)).1
-
--- def lex_rvec : linear_order (rvec m) :=
--- @pilex.linear_order _ _ _ (is_well_order.wf _)
---   (λ _, pilex.linear_order (is_well_order.wf _))
-
--- def lex_rvec_decidable_linear_order : decidable_linear_order (rvec m) :=
--- { decidable_le := λ x y, decidable_of_iff
---     (list.lex (<) (rvec.to_list x) (rvec.to_list y) ∨ x = y) sorry,
---   ..lex_rvec }
-
--- local attribute [instance] lex_rvec_decidable_linear_order
-
--- def lex_ordered_comm_group_rvec : ordered_comm_group (rvec m) :=
--- @pilex.ordered_comm_group _ _ _ (λ _, pilex.ordered_comm_group)
-
--- local attribute [instance] lex_ordered_comm_group_rvec
---   lex_rvec_decidable_linear_order
-
--- def pert_rat (m : ℕ) : Type := ℚ × rvec m
-
--- instance : decidable_eq (pert_rat m) := by unfold pert_rat; apply_instance
-
--- instance : add_comm_group (pert_rat m) := prod.add_comm_group
-
--- instance : module ℚ (pert_rat m) := prod.module
-
--- instance : decidable_linear_order (pert_rat m) :=
--- by letI := @lex_rvec_decidable_linear_order m; exact
--- { decidable_le := @prod.lex.decidable _ _ _ _ _ _ _
---     (lex_rvec_decidable_linear_order).decidable_le,
---   ..lex_linear_order }
-
--- instance pert_rat.decidable_le (i j : pert_rat m) : decidable (i ≤ j) :=
--- @decidable_linear_order.decidable_le _ pert_rat.decidable_linear_order i j
 
 instance has_repr_fin_fun {n : ℕ} {α : Type*} [has_repr α] : has_repr (fin n → α) :=
 ⟨λ f, repr (vector.of_fn f).to_list⟩
 
 instance {m n} : has_repr (matrix (fin m) (fin n) ℚ) := has_repr_fin_fun
 
--- instance : has_repr (pert_rat m) := prod.has_repr
+namespace simplex
 
 open list
 
@@ -177,11 +151,11 @@ def swap (B : prebasis m n) (r : fin m) (s : fin (n - m)) : prebasis m n :=
 { basis := B.basis.trans (equiv.swap (B.basisg r) (B.nonbasisg s)).to_pequiv,
   nonbasis := B.nonbasis.trans (equiv.swap (B.basisg r) (B.nonbasisg s)).to_pequiv,
   basis_trans_basis_symm := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.basis,
-        ← equiv.to_pequiv_symm,  ← equiv.to_pequiv_trans];
-      simp,
-  nonbasis_trans_nonbasis_symm := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.nonbasis, ← equiv.to_pequiv_symm,
-        ← equiv.to_pequiv_trans];
-      simp,
+      ← equiv.to_pequiv_symm,  ← equiv.to_pequiv_trans];
+    simp,
+  nonbasis_trans_nonbasis_symm := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.nonbasis,
+      ← equiv.to_pequiv_symm, ← equiv.to_pequiv_trans];
+    simp,
   basis_trans_nonbasis_symm := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.basis,
       ← equiv.to_pequiv_symm, ← equiv.to_pequiv_trans];
     simp }
@@ -231,7 +205,8 @@ have (univ.image B.basis) ∪ (univ.image B.nonbasis) = univ.image (@some (fin n
       { intros _ _ h, injection h }
     end),
 begin
-  simp only [option.eq_none_iff_forall_not_mem, mem_iff_mem B.basis, mem_iff_mem B.nonbasis] at hb hnb,
+  simp only [option.eq_none_iff_forall_not_mem, mem_iff_mem B.basis,
+    mem_iff_mem B.nonbasis] at hb hnb,
   have := (finset.ext.1 this (some j)).2 (mem_image_of_mem _ (mem_univ _)),
   simp only [hb, hnb, mem_image, finset.mem_union, option.mem_def.symm] at this, tauto
 end
@@ -261,12 +236,49 @@ option.get_mem _
 @[simp] lemma basis_basisg (B : prebasis m n) (r : fin m) : B.basis.symm (B.basisg r) = some r:=
 B.basis.mem_iff_mem.2 (basisg_mem _ _)
 
-@[simp] lemma nonbasis_nonbasisg (B : prebasis m n) (s : fin (n - m)) : s ∈ B.nonbasis.symm (B.nonbasisg s) :=
+@[simp] lemma nonbasis_nonbasisg (B : prebasis m n) (s : fin (n - m)) :
+  s ∈ B.nonbasis.symm (B.nonbasisg s) :=
 B.nonbasis.mem_iff_mem.2 (nonbasisg_mem _ _)
+
+lemma eq_basisg_or_nonbasisg (B : prebasis m n) (i : fin n) :
+  (∃ j, i = B.basisg j) ∨ (∃ j, i = B.nonbasisg j) :=
+begin
+  dsimp only [basisg, nonbasisg],
+  by_cases h : ↥(B.basis.symm i).is_some,
+  { cases option.is_some_iff_exists.1 h with j hj,
+    exact or.inl ⟨j, by rw [B.basis.eq_some_iff] at hj;
+      rw [← option.some_inj, ← hj, option.some_get]⟩ },
+  { rw [(@not_iff_comm _ _ (classical.dec _) (classical.dec _)).1 (B.is_some_basis_iff _).symm] at h,
+    cases option.is_some_iff_exists.1 h with j hj,
+    exact or.inr ⟨j, by rw [B.nonbasis.eq_some_iff] at hj;
+      rw [← option.some_inj, ← hj, option.some_get]⟩ }
+end
 
 lemma basisg_ne_nonbasisg (B : prebasis m n) (i : fin m) (j : fin (n - m)):
   B.basisg i ≠ B.nonbasisg j :=
 λ h, by simpa using congr_arg B.basis.symm h
+
+lemma single_basisg_mul_basis (B : prebasis m n) (i : fin m) :
+  ((single (0 : fin 1) (B.basisg i)).to_matrix : matrix _ _ ℚ) ⬝
+    B.basis.to_matrixᵀ = (single (0 : fin 1) i).to_matrix :=
+by rw [← to_matrix_symm, ← to_matrix_trans, single_trans_of_mem _ (basis_basisg _ _)]
+
+lemma single_basisg_mul_nonbasis (B : prebasis m n) (i : fin m) :
+  ((single (0 : fin 1) (B.basisg i)).to_matrix : matrix _ _ ℚ) ⬝
+    B.nonbasis.to_matrixᵀ = 0 :=
+by rw [← to_matrix_symm, ← to_matrix_trans, single_trans_of_eq_none _ (nonbasis_basisg_eq_none _ _),
+  to_matrix_bot]; apply_instance
+
+lemma single_nonbasisg_mul_nonbasis (B : prebasis m n) (k : fin (n - m)) :
+  ((single (0 : fin 1) (B.nonbasisg k)).to_matrix : matrix _ _ ℚ) ⬝
+    B.nonbasis.to_matrixᵀ = (single (0 : fin 1) k).to_matrix :=
+by rw [← to_matrix_symm, ← to_matrix_trans, single_trans_of_mem _ (nonbasis_nonbasisg _ _)]
+
+lemma single_nonbasisg_mul_basis (B : prebasis m n) (k : fin (n - m)) :
+  ((single (0 : fin 1) (B.nonbasisg k)).to_matrix : matrix _ _ ℚ) ⬝
+    B.basis.to_matrixᵀ = 0 :=
+by rw [← to_matrix_symm, ← to_matrix_trans, single_trans_of_eq_none _ (basis_nonbasisg_eq_none _ _),
+  to_matrix_bot]; apply_instance
 
 lemma nonbasis_trans_basis_symm (B : prebasis m n) : B.nonbasis.trans B.basis.symm = ⊥ :=
 symm_injective $ by rw [symm_trans_rev, symm_symm, basis_trans_nonbasis_symm, symm_bot]
@@ -344,15 +356,16 @@ begin
   { simp *; split; intros; simp * at * }
 end
 
-lemma swap_basis_transpose_apply_single_of_ne (B : prebasis m n) (r : fin m) (s : fin (n - m)) (i : fin m) (hir : i ≠ r) :
+lemma swap_basis_transpose_apply_single_of_ne (B : prebasis m n) {r : fin m}
+  (s : fin (n - m)) {i : fin m} (hir : i ≠ r) :
   ((B.swap r s).basis.to_matrixᵀ : matrix (fin n) (fin m) ℚ) ⬝ (single i (0 : fin 1)).to_matrix =
   B.basis.to_matrixᵀ ⬝ (single i 0).to_matrix :=
 begin
-  simp only [swap_basis_eq, sub_eq_add_neg, matrix.mul_add, matrix.mul_neg, matrix.mul_one, matrix.add_mul,
-    (to_matrix_trans _ _).symm, (to_matrix_symm _).symm, transpose_add, transpose_neg, matrix.neg_mul, symm_trans_rev,
-    trans_assoc],
-  rw [trans_single_of_mem _ (basis_basisg _ _), trans_single_of_eq_none, trans_single_of_eq_none, to_matrix_bot,
-    neg_zero, add_zero, add_zero];
+  simp only [swap_basis_eq, sub_eq_add_neg, matrix.mul_add, matrix.mul_neg, matrix.mul_one,
+    matrix.add_mul, (to_matrix_trans _ _).symm, (to_matrix_symm _).symm, transpose_add,
+    transpose_neg, matrix.neg_mul, symm_trans_rev, trans_assoc],
+  rw [trans_single_of_mem _ (basis_basisg _ _), trans_single_of_eq_none, trans_single_of_eq_none,
+    to_matrix_bot, neg_zero, add_zero, add_zero];
   {dsimp [single]; simp [*, B.injective_basisg.eq_iff]} <|> apply_instance
 end
 
@@ -360,34 +373,44 @@ lemma swap_basis_transpose_apply_single (B : prebasis m n) (r : fin m) (s : fin 
   ((B.swap r s).basis.to_matrixᵀ : matrix (fin n) (fin m) ℚ) ⬝ (single r (0 : fin 1)).to_matrix =
   B.nonbasis.to_matrixᵀ ⬝ (single s (0 : fin 1)).to_matrix :=
 begin
-  simp only [swap_basis_eq, sub_eq_add_neg, matrix.mul_add, matrix.mul_neg, matrix.mul_one, matrix.add_mul,
-    (to_matrix_trans _ _).symm, (to_matrix_symm _).symm, transpose_add, transpose_neg, matrix.neg_mul, symm_trans_rev,
-    trans_assoc, symm_single],
+  simp only [swap_basis_eq, sub_eq_add_neg, matrix.mul_add, matrix.mul_neg, matrix.mul_one,
+    matrix.add_mul, (to_matrix_trans _ _).symm, (to_matrix_symm _).symm, transpose_add,
+    transpose_neg, matrix.neg_mul, symm_trans_rev, trans_assoc, symm_single],
   rw [trans_single_of_mem _ (basis_basisg _ _), trans_single_of_mem _ (mem_single _ _),
-    trans_single_of_mem _ (mem_single _ _), trans_single_of_mem _ (nonbasis_nonbasisg _ _)], simp,
+    trans_single_of_mem _ (mem_single _ _), trans_single_of_mem _ (nonbasis_nonbasisg _ _)],
+  simp,
   all_goals {apply_instance}
 end
 
-def pivot_element (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (r : fin m) (s : fin (n - m)) : cvec 1 :=
+end prebasis
+
+open prebasis
+
+/- By convention `A_bar` and `b_bar` are in tableau form, so definitions may only be correct
+  assuming `A ⬝ B.basis.to_matrixᵀ = 1` and `b_bar = 0` -/
+
+def pivot_element (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (r : fin m)
+  (s : fin (n - m)) : cvec 1 :=
 (single 0 r).to_matrix ⬝ A_bar ⬝ B.nonbasis.to_matrixᵀ ⬝ (single s 0).to_matrix
 
-def swap_inverse (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n)
+def swap_inverse (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
   (r : fin m) (s : fin (n - m)) : matrix (fin m) (fin m) ℚ :=
-(1 + (1 - A_bar ⬝ B.nonbasis.to_matrixᵀ ⬝ (single s (0 : fin 1)).to_matrix ⬝ (single (0 : fin 1) r).to_matrix) ⬝
-  (single r (0 : fin 1)).to_matrix ⬝ inverse (pivot_element A_bar B r s) ⬝ (single (0 : fin 1) r).to_matrix)
+(1 + (1 - A_bar ⬝ B.nonbasis.to_matrixᵀ ⬝ (single s (0 : fin 1)).to_matrix ⬝
+    (single (0 : fin 1) r).to_matrix) ⬝ (single r (0 : fin 1)).to_matrix ⬝
+    inverse (pivot_element B A_bar r s) ⬝ (single (0 : fin 1) r).to_matrix)
 
 lemma mul_single_ext {A B : matrix (fin m) (fin n) ℚ}
   (h : ∀ j, A ⬝ (single j (0 : fin 1)).to_matrix = B ⬝ (single j (0 : fin 1)).to_matrix) : A = B :=
 by ext i j; simpa [matrix_mul_apply] using congr_fun (congr_fun (h j) i) 0
 
-def ratio (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
-  (B : prebasis m n) (r : fin m) (s : fin (n - m)) : cvec 1 :=
-inverse (pivot_element A_bar B r s) ⬝ ((single 0 r).to_matrix ⬝ b_bar)
+def ratio (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
+  (r : fin m) (s : fin (n - m)) : cvec 1 :=
+inverse (pivot_element B A_bar r s) ⬝ ((single 0 r).to_matrix ⬝ b_bar)
 
-lemma swap_mul_swap_inverse (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n)
-  (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) (r : fin m) (s : fin (n - m))
-  (hpivot : pivot_element A_bar B r s ≠ 0) :
-  swap_inverse A_bar B r s ⬝ (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) = 1 :=
+lemma swap_mul_swap_inverse {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ}
+  {r : fin m} {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
+  (hpivot : pivot_element B A_bar r s ≠ 0) :
+  swap_inverse B A_bar r s ⬝ (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) = 1 :=
 have ((single (0 : fin 1) r).to_matrix ⬝ (single r 0).to_matrix : cvec 1) = 1,
   by rw [← to_matrix_trans]; simp,
 begin
@@ -402,103 +425,127 @@ begin
     simp },
   { have : ((single (0 : fin 1) r).to_matrix ⬝ (single i 0).to_matrix : cvec 1) = 0,
     { rw [← to_matrix_trans, single_trans_single_of_ne (ne.symm h), to_matrix_bot] },
-    simp [swap_basis_transpose_apply_single_of_ne _ _ _ _ h,
+    simp [swap_basis_transpose_apply_single_of_ne _ _ h,
       mul_right_eq_of_mul_eq hA_bar, this] }
 end
 
-lemma has_left_inverse_swap' {A_bar : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
+lemma has_left_inverse_swap' {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ}
   {r : fin m} {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
-  (h : pivot_element A_bar B r s ≠ 0) :
+  (h : pivot_element B A_bar r s ≠ 0) :
   (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ).has_left_inverse :=
-⟨_, swap_mul_swap_inverse A_bar B hA_bar _ _ h⟩
-
-lemma swap_mul_swap_inverse' {A : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
-  {r : fin m} {s : fin (n - m)} (hAB : (A ⬝ B.basis.to_matrixᵀ).has_left_inverse)
-  (h : pivot_element (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A) B r s ≠ 0) :
-  swap_inverse (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A) B r s ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) ⬝
-  (A ⬝ (B.swap r s).basis.to_matrixᵀ) = 1 :=
-have inverse (A ⬝ (to_matrix (B.basis))ᵀ) ⬝ A ⬝ (to_matrix (B.basis))ᵀ = 1,
-  by rw [matrix.mul_assoc]; exact matrix.inverse_mul hAB,
-by rw [← swap_mul_swap_inverse (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A) B this r s h];
-    simp [matrix.mul_assoc]
-
-lemma has_left_inverse_swap {A : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
-  {r : fin m} {s : fin (n - m)} (hAB : (A ⬝ B.basis.to_matrixᵀ).has_left_inverse)
-  (h : pivot_element (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A) B r s ≠ 0) :
-  (A ⬝ (B.swap r s).basis.to_matrixᵀ).has_left_inverse :=
-⟨_, swap_mul_swap_inverse' hAB h⟩
+⟨_, swap_mul_swap_inverse hA_bar h⟩
 
 lemma inverse_swap_eq' {A_bar : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
   {r : fin m} {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
-  (h : pivot_element A_bar B r s ≠ 0) :
-  inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) = swap_inverse A_bar B r s :=
+  (h : pivot_element B A_bar r s ≠ 0) :
+  inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) = swap_inverse B A_bar r s :=
 sorry
 
-lemma inverse_swap_eq {A : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
-  {r : fin m} {s : fin (n - m)} (hAB : (A ⬝ B.basis.to_matrixᵀ).has_left_inverse)
-  (h : pivot_element (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A) B r s ≠ 0) :
-  inverse (A ⬝ (B.swap r s).basis.to_matrixᵀ) = swap_inverse
-    (inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ A) B r s ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) :=
-by conv_lhs {rw [← matrix.one_mul (inverse (A ⬝ (B.swap r s).basis.to_matrixᵀ)),
-  ← swap_mul_swap_inverse' hAB h, matrix.mul_assoc,
-  matrix.mul_inverse (has_right_inverse_iff_has_left_inverse.1 (has_left_inverse_swap hAB h)),
-  matrix.mul_one]}
-
-def adjust (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b_bar : cvec m)
-  (a : cvec 1) (s : fin (n - m)) : cvec n :=
+def adjust (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
+  (s : fin (n - m)) (a : cvec 1) : cvec n :=
 B.basis.to_matrixᵀ ⬝ b_bar + (B.nonbasis.to_matrixᵀ -
   B.basis.to_matrixᵀ ⬝ A_bar ⬝ B.nonbasis.to_matrixᵀ) ⬝ (single s 0).to_matrix ⬝ a
 
-lemma adjust_is_solution (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b_bar : cvec m)
-  (a : cvec 1) (s : fin (n - m)) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
-  A_bar ⬝ adjust A_bar B b_bar a s = b_bar :=
+lemma adjust_is_solution {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ} (b_bar : cvec m)
+  (s : fin (n - m)) (a : cvec 1) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
+  A_bar ⬝ adjust B A_bar b_bar s a = b_bar :=
 by simp [matrix.mul_assoc, matrix.mul_add, adjust, matrix.add_mul, mul_right_eq_of_mul_eq hA_bar]
 
-lemma single_pivot_mul_adjust (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b_bar : cvec m)
-  (a : cvec 1) (s : fin (n - m)) :
-  (single 0 s).to_matrix ⬝ B.nonbasis.to_matrix ⬝ adjust A_bar B b_bar a s = a :=
+lemma single_pivot_mul_adjust (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
+  (s : fin (n - m)) (a : cvec 1) :
+  (single 0 s).to_matrix ⬝ B.nonbasis.to_matrix ⬝ adjust B A_bar b_bar s a = a :=
 by simp [matrix.mul_assoc, matrix.add_mul, matrix.mul_add, adjust,
   mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose B),
   mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose B)]
 
-lemma basis_mul_adjust (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b_bar : cvec m)
-  (a : cvec 1) (s : fin (n - m)) :
-  B.basis.to_matrix ⬝ adjust A_bar B b_bar a s = b_bar -
+lemma basis_mul_adjust (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
+  (s : fin (n - m)) (a : cvec 1) :
+  B.basis.to_matrix ⬝ adjust B A_bar b_bar s a = b_bar -
   A_bar ⬝ B.nonbasis.to_matrixᵀ ⬝ (single s 0).to_matrix ⬝ a :=
 by simp [matrix.mul_assoc, matrix.add_mul, matrix.mul_add, adjust,
   mul_right_eq_of_mul_eq (basis_mul_basis_transpose B),
   mul_right_eq_of_mul_eq (basis_mul_nonbasis_transpose B)]
 
-lemma nonbasis_mul_adjust (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b_bar : cvec m)
-  (a : cvec 1) {s k : fin (n - m)} (h : s ≠ k) :
-  (single (0 : fin 1) k).to_matrix ⬝ B.nonbasis.to_matrix ⬝ adjust A_bar B b_bar a s = 0 :=
+lemma nonbasis_mul_adjust (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
+  (b_bar : cvec m) (s : fin (n - m)) (a : cvec 1) :
+  B.nonbasis.to_matrix ⬝ adjust B A_bar b_bar s a = to_matrix (single s 0) ⬝ a :=
 by simp [matrix.mul_assoc, matrix.add_mul, matrix.mul_add, adjust,
   mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose B),
-  mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose B),
-  mul_right_eq_of_mul_eq (single_mul_single_of_ne h.symm _ _)]
+  mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose B)]
 
-def reduced_cost (A_bar : matrix (fin m) (fin n) ℚ) (c : rvec n)
-  (B : prebasis m n) : matrix (fin 1) (fin (n - m)) ℚ :=
+lemma adjust_nonneg_iff {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ}
+  {b_bar : cvec m} {s : fin (n - m)} {a : cvec 1} (ha : 0 ≤ a) (hb : 0 ≤ b_bar) :
+  0 ≤ adjust B A_bar b_bar s a ↔
+    ∀ (i : fin m), 0 < pivot_element B A_bar i s → a ≤ ratio B A_bar b_bar i s :=
+have ∀ i : fin m, (single (0 : fin 1) (B.basisg i)).to_matrix ⬝ 0 ≤
+  (single 0 (B.basisg i)).to_matrix ⬝ (B.basis.to_matrixᵀ ⬝ b_bar +
+    (B.nonbasis.to_matrixᵀ - B.basis.to_matrixᵀ ⬝ A_bar ⬝ B.nonbasis.to_matrixᵀ) ⬝
+    to_matrix (single s 0) ⬝ a) ↔
+    0 < pivot_element B A_bar i s → a ≤ ratio B A_bar b_bar i s,
+  begin
+    assume i,
+    simp only [matrix.mul_zero, ratio, matrix.mul_add, matrix.add_mul, matrix.mul_assoc,
+      sub_eq_add_neg, matrix.mul_neg, matrix.neg_mul, matrix.mul_assoc,
+      mul_right_eq_of_mul_eq (single_basisg_mul_basis B i),
+      mul_right_eq_of_mul_eq (single_basisg_mul_nonbasis B i), matrix.zero_mul, zero_add,
+      matrix.inverse_eq_inv],
+    rw [← sub_eq_add_neg, sub_nonneg],
+    simp [pivot_element, matrix.mul_assoc],
+    cases classical.em (0 < (single (0 : fin 1) i).to_matrix ⬝
+      (A_bar ⬝ (B.nonbasis.to_matrixᵀ ⬝ (single s (0 : fin 1)).to_matrix))) with hpos hpos,
+    { rw [← matrix.mul_eq_mul, ← mul_comm, ← div_eq_mul_inv, le_div_iff hpos, mul_comm,
+        matrix.mul_eq_mul],
+      simp [matrix.mul_assoc, hpos] },
+    { simp only [hpos, forall_prop_of_false, iff_true, not_false_iff],
+      simp only [(matrix.mul_assoc _ _ _).symm, (matrix.mul_eq_mul _ _).symm] at *,
+      intros,
+      refine le_trans (mul_nonpos_of_nonpos_of_nonneg (le_of_not_gt hpos) ha) _,
+      rw [cvec_le_iff] at hb,
+      simpa using hb i },
+  end,
+begin
+  rw [adjust, cvec_le_iff],
+  split,
+  { assume h i,
+    rw [← this],
+    exact h (B.basisg i) },
+  { assume h j,
+    rcases eq_basisg_or_nonbasisg B j with ⟨i, hi⟩ | ⟨k, hk⟩,
+    { rw [hi, this], exact h _ },
+    { simp only [hk, matrix.mul_assoc,
+        mul_right_eq_of_mul_eq (single_nonbasisg_mul_basis _ _),
+        matrix.mul_add, matrix.add_mul, matrix.mul_neg,
+        mul_right_eq_of_mul_eq (single_nonbasisg_mul_nonbasis _ _),
+        add_zero, matrix.neg_mul, matrix.zero_mul,
+        zero_add, matrix.mul_zero, sub_eq_add_neg, neg_zero],
+      by_cases hks : k = s,
+      { simpa [hks] },
+      { rw [mul_right_eq_of_mul_eq (single_mul_single_of_ne hks _ _), matrix.zero_mul],
+        exact le_refl _ } } }
+end
+
+def reduced_cost (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (c : rvec n) :
+  matrix (fin 1) (fin (n - m)) ℚ :=
 c ⬝ (B.nonbasis.to_matrixᵀ - B.basis.to_matrixᵀ ⬝ A_bar ⬝ B.nonbasis.to_matrixᵀ)
 
-def solution_of_basis (A : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b : cvec m) : cvec n :=
+def solution_of_basis (B : prebasis m n) (A : matrix (fin m) (fin n) ℚ) (b : cvec m) : cvec n :=
 B.basis.to_matrixᵀ ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ b
 
 lemma solution_of_basis_is_solution {A : matrix (fin m) (fin n) ℚ} {B : prebasis m n}
   (b : cvec m) (hA : (A ⬝ B.basis.to_matrixᵀ).has_left_inverse) :
-  A ⬝ solution_of_basis A B b = b :=
+  A ⬝ solution_of_basis B A b = b :=
 by rw [solution_of_basis, ← matrix.mul_assoc, ← matrix.mul_assoc,
     mul_inverse (has_right_inverse_iff_has_left_inverse.1 hA), matrix.one_mul]
 
 def objective_function_of_basis (A : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b : cvec m)
   (c : rvec n) : cvec 1 :=
-c ⬝ solution_of_basis A B b
+c ⬝ solution_of_basis B A b
 
 /-- For proving `solution_of_basis_eq_adjust`, it suffices to prove they are equal after
   left multiplication by `A_bar` and after left multiplication by `B.nonbasis.to_matrix`.
   This lemma helps prove that. -/
-lemma basis_transpose_add_nonbasis_transpose_mul_nonbasis
-  (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
+lemma basis_transpose_add_nonbasis_transpose_mul_nonbasis {B : prebasis m n}
+  {A_bar : matrix (fin m) (fin n) ℚ} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
   (B.basis.to_matrixᵀ ⬝ A_bar + B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix) ⬝
   (1 - B.basis.to_matrixᵀ ⬝ A_bar ⬝ B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix) = 1 :=
 by rw [← transpose_mul_add_tranpose_mul B];
@@ -507,83 +554,86 @@ by rw [← transpose_mul_add_tranpose_mul B];
     mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose _),
     mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose _)]
 
-lemma solution_of_basis_eq_adjust (A_bar : matrix (fin m) (fin n) ℚ) (B : prebasis m n) (b_bar : cvec m)
-  (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) (r : fin m) (s : fin (n - m))
-  (hpivot : pivot_element A_bar B r s ≠ 0) :
-  solution_of_basis A_bar (B.swap r s) b_bar =
-  adjust A_bar B b_bar (ratio A_bar b_bar B r s) s :=
--- It suffices to prove they are equal after left multiplication by `A_bar` and by `B.nonbasis.to_matrix`
-suffices A_bar ⬝ (B.swap r s).basis.to_matrixᵀ ⬝ inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) ⬝ b_bar =
-    A_bar ⬝ adjust A_bar B b_bar (ratio A_bar b_bar B r s) s ∧
-    B.nonbasis.to_matrix ⬝ (B.swap r s).basis.to_matrixᵀ ⬝ inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) ⬝ b_bar =
-    B.nonbasis.to_matrix ⬝ adjust A_bar B b_bar (ratio A_bar b_bar B r s) s,
+lemma solution_of_basis_eq_adjust {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ}
+  (b_bar : cvec m) {r : fin m} {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
+  (hpivot : pivot_element B A_bar r s ≠ 0) :
+  solution_of_basis (B.swap r s) A_bar b_bar = adjust B A_bar b_bar s (ratio B A_bar b_bar r s) :=
+/- It suffices to prove they are equal after left multiplication by `A_bar` and by
+`B.nonbasis.to_matrix` -/
+suffices A_bar ⬝ (B.swap r s).basis.to_matrixᵀ
+    ⬝ inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) ⬝ b_bar =
+    A_bar ⬝ adjust B A_bar b_bar s (ratio B A_bar b_bar r s) ∧
+    B.nonbasis.to_matrix ⬝ (B.swap r s).basis.to_matrixᵀ
+    ⬝ inverse (A_bar ⬝ (B.swap r s).basis.to_matrixᵀ) ⬝ b_bar =
+    B.nonbasis.to_matrix ⬝ adjust B A_bar b_bar s (ratio B A_bar b_bar r s),
   begin
     rw [solution_of_basis, ← matrix.mul_left_inj ⟨_, mul_eq_one_comm.1
-      (basis_transpose_add_nonbasis_transpose_mul_nonbasis A_bar B hA_bar)⟩, matrix.add_mul,
+      (basis_transpose_add_nonbasis_transpose_mul_nonbasis hA_bar)⟩, matrix.add_mul,
       matrix.add_mul],
     simp only [matrix.mul_assoc] at *,
     rw [this.1, this.2]
   end,
-⟨by rw [adjust_is_solution _ _ _ _ _ hA_bar,
-    matrix.mul_inverse (has_right_inverse_iff_has_left_inverse.1 (has_left_inverse_swap' hA_bar hpivot)),
+{ left := by rw [adjust_is_solution _ _ _ hA_bar, matrix.mul_inverse
+    (has_right_inverse_iff_has_left_inverse.1 (has_left_inverse_swap' hA_bar hpivot)),
     matrix.one_mul],
+  right :=
 /- This `have` would be unnecessary with a powerful `assoc_rw` tactic -/
-have (single s r).to_matrix ⬝ (A_bar ⬝ (B.nonbasis.to_matrixᵀ ⬝ ((single s (0 : fin 1)).to_matrix ⬝
-  ((single 0 r).to_matrix ⬝ ((single r 0).to_matrix ⬝ (inverse (pivot_element A_bar B r s) ⬝
-  ((single 0 r).to_matrix ⬝ b_bar))))))) = (single s (0 : fin 1)).to_matrix ⬝ (single 0 r).to_matrix ⬝ b_bar,
-  begin
-    simp only [pivot_element, mul_right_eq_of_mul_eq (single_mul_single _ _ _)],
-    rw [← single_mul_single s (0 : fin 1) r],
-    simp only [(matrix.mul_assoc _ _ _).symm],
-    simp only [(single s (0 : fin 1)).to_matrix.mul_assoc],
-    rw [one_by_one_mul_inv_cancel, matrix.one_mul],
-    { simpa [pivot.matrix.mul_assoc] using hpivot }
-  end,
-begin
-  simp only [adjust, matrix.mul_add, zero_add, sub_eq_add_neg, matrix.neg_mul,
-    mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose _), matrix.zero_mul,
-    nonbasis_mul_swap_basis_tranpose, matrix.mul_assoc, matrix.add_mul, matrix.mul_neg,
-    mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose _), matrix.one_mul, neg_zero,
-    add_zero, inverse_swap_eq' hA_bar hpivot, swap_inverse, ratio, this],
-  simp
-end⟩
+    have (single s r).to_matrix ⬝ (A_bar ⬝ (B.nonbasis.to_matrixᵀ ⬝ ((single s (0 : fin 1)).to_matrix
+      ⬝ ((single 0 r).to_matrix ⬝ ((single r 0).to_matrix ⬝ (inverse (pivot_element B A_bar r s)
+      ⬝ ((single 0 r).to_matrix ⬝ b_bar))))))) = (single s (0 : fin 1)).to_matrix
+      ⬝ (single 0 r).to_matrix ⬝ b_bar,
+      begin
+        simp only [pivot_element, mul_right_eq_of_mul_eq (single_mul_single _ _ _)],
+        rw [← single_mul_single s (0 : fin 1) r],
+        simp only [(matrix.mul_assoc _ _ _).symm],
+        simp only [(single s (0 : fin 1)).to_matrix.mul_assoc],
+        rw [one_by_one_mul_inv_cancel, matrix.one_mul],
+        { simpa [pivot.matrix.mul_assoc] using hpivot }
+      end,
+    begin
+      simp only [adjust, matrix.mul_add, zero_add, sub_eq_add_neg, matrix.neg_mul,
+        mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose _), matrix.zero_mul,
+        nonbasis_mul_swap_basis_tranpose, matrix.mul_assoc, matrix.add_mul, matrix.mul_neg,
+        mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose _), matrix.one_mul, neg_zero,
+        add_zero, inverse_swap_eq' hA_bar hpivot, swap_inverse, ratio, this],
+      simp
+    end }
 
-lemma cvec_eq_basis_add_nonbasis (x : cvec n) (B : prebasis m n) :
+lemma cvec_eq_basis_add_nonbasis (B : prebasis m n) (x : cvec n) :
   x = B.basis.to_matrixᵀ ⬝ B.basis.to_matrix ⬝ x + B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix ⬝ x :=
 by simp only [(matrix.mul_assoc _ _ _).symm, (matrix.add_mul _ _ _).symm,
   B.transpose_mul_add_tranpose_mul, matrix.one_mul]
 
-lemma objective_function_eq
-  {A_bar : matrix (fin m) (fin n) ℚ} {c : rvec n} {b_bar : cvec m} {x : cvec n}
-  (B : prebasis m n)
-  (h : A_bar ⬝ x = b_bar) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
+lemma objective_function_eq {B : prebasis m n}
+  {A_bar : matrix (fin m) (fin n) ℚ}  {b_bar : cvec m} {c : rvec n} {x : cvec n}
+  (hAx : A_bar ⬝ x = b_bar) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
   c ⬝ x = c ⬝ B.basis.to_matrixᵀ ⬝ b_bar +
-  reduced_cost A_bar c B ⬝ B.nonbasis.to_matrix ⬝ x :=
+  reduced_cost B A_bar c ⬝ B.nonbasis.to_matrix ⬝ x :=
 have B.basis.to_matrix ⬝ x = b_bar - A_bar ⬝ B.nonbasis.to_matrixᵀ
     ⬝ B.nonbasis.to_matrix ⬝ x,
   by rw [eq_sub_iff_add_eq, ← (B.basis.to_matrix).one_mul, ← hA_bar,
     matrix.mul_assoc, matrix.mul_assoc, matrix.mul_assoc, matrix.mul_assoc,
     ← matrix.mul_add, ← matrix.mul_assoc, ← matrix.mul_assoc, ← matrix.add_mul,
-    transpose_mul_add_tranpose_mul, matrix.one_mul, h],
+    transpose_mul_add_tranpose_mul, matrix.one_mul, hAx],
 begin
-  conv_lhs {rw [cvec_eq_basis_add_nonbasis x B, matrix.mul_assoc, this]},
-  simp [matrix.mul_add, matrix.mul_assoc, matrix.add_mul, reduced_cost],
+  conv_lhs {rw [cvec_eq_basis_add_nonbasis B x, matrix.mul_assoc, this]},
+  simp [matrix.mul_add, matrix.mul_assoc, matrix.add_mul, reduced_cost]
 end
 
-lemma objective_function_swap_eq {A_bar : matrix (fin m) (fin n) ℚ}
-  (c : rvec n) (b_bar : cvec m) {B : prebasis m n}
-  (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
-  {r : fin m} {s : fin (n - m)}
-  (hpivot : pivot_element A_bar B r s ≠ 0) :
+lemma objective_function_swap_eq {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ}
+  (b_bar : cvec m) (c : rvec n) {r : fin m} {s : fin (n - m)}
+  (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) (hpivot : pivot_element B A_bar r s ≠ 0) :
   objective_function_of_basis A_bar (B.swap r s) b_bar c =
   objective_function_of_basis A_bar B b_bar c +
-  reduced_cost A_bar c B ⬝ (single s (0 : fin 1)).to_matrix ⬝ ratio A_bar b_bar B r s :=
-have A_bar ⬝ (B.basis.to_matrixᵀ ⬝ b_bar) = b_bar,
+  reduced_cost B A_bar c ⬝ (single s (0 : fin 1)).to_matrix ⬝ ratio B A_bar b_bar r s :=
+have h₁ : A_bar ⬝ (B.basis.to_matrixᵀ ⬝ b_bar) = b_bar,
   by rw [← matrix.mul_assoc, hA_bar, matrix.one_mul],
+have h₂ : (A_bar ⬝ (to_matrix ((swap B r s).basis))ᵀ).has_left_inverse,
+  from has_left_inverse_swap' hA_bar hpivot,
 begin
-  rw [objective_function_of_basis, objective_function_eq B
-    (solution_of_basis_is_solution _ _) hA_bar,
-    solution_of_basis_eq_adjust, objective_function_of_basis,
+  rw [objective_function_of_basis, objective_function_eq
+    (solution_of_basis_is_solution _ h₂) hA_bar,
+    solution_of_basis_eq_adjust _ hA_bar hpivot, objective_function_of_basis,
     solution_of_basis, hA_bar, inverse_one, matrix.mul_one, c.mul_assoc,
     matrix.mul_assoc, matrix.mul_assoc],
   congr' 2,
@@ -592,10 +642,66 @@ begin
     matrix.add_mul, matrix.neg_mul, matrix.mul_neg,
     mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose _),
     mul_right_eq_of_mul_eq (nonbasis_mul_nonbasis_transpose _)],
-  simp,
+  simp
 end
 
+lemma swap_nonneg_iff {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ} (b_bar : cvec m)
+  (c : rvec n) {r : fin m} {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
+  (hpivot : 0 < pivot_element B A_bar r s) (h0b : 0 ≤ b_bar) :
+  0 ≤ solution_of_basis (B.swap r s) A_bar b_bar ↔
+  (∀ i : fin m, 0 < pivot_element B A_bar i s →
+    ratio B A_bar b_bar r s ≤ ratio B A_bar b_bar i s) :=
+begin
+  rw [solution_of_basis_eq_adjust _ hA_bar (ne_of_lt hpivot).symm, adjust_nonneg_iff _ h0b, ratio],
+  rw cvec_le_iff at h0b,
+  exact mul_nonneg (inv_nonneg.2 (le_of_lt hpivot)) (by simpa using h0b r)
+end
 
+lemma unbounded_of_pivot_element_nonpos {B : prebasis m n}
+  {A_bar : matrix (fin m) (fin n) ℚ} (b_bar : cvec m) (c : rvec n)
+  {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
+  (h0b : 0 ≤ b_bar) (hs : reduced_cost B A_bar c ⬝ (single s (0 : fin 1)).to_matrix > 0)
+  (h : ∀ r, pivot_element B A_bar r s ≤ 0) : ∀ q : cvec 1, { a : cvec 1 //
+  let x := adjust B A_bar b_bar s a in A_bar ⬝ x = b_bar ∧ 0 ≤ x ∧ q ≤ c ⬝ x } :=
+begin
+  assume q,
+  simp only [adjust_is_solution b_bar _ _ hA_bar, true_and, eq_self_iff_true],
+  simp only [objective_function_eq (adjust_is_solution b_bar _ _ hA_bar) hA_bar]
+    {single_pass := tt},
+  simp only [nonbasis_mul_adjust, matrix.mul_assoc],
+  let a := (reduced_cost B A_bar c ⬝ (single s (0 : fin 1)).to_matrix)⁻¹ ⬝
+    (q - c ⬝ ((to_matrix (B.basis))ᵀ ⬝ b_bar)),
+  use max 0 a,
+  split,
+  { rw adjust_nonneg_iff (le_max_left _ _) h0b,
+    assume i hi,
+    exact absurd hi (not_lt_of_ge (h _)), },
+  { cases le_total a 0 with ha0 ha0,
+    { rw [max_eq_left ha0],
+      simp only [a, (mul_eq_mul _ _).symm] at ha0,
+      rw [mul_comm, ← div_eq_mul_inv, div_le_iff hs, _root_.zero_mul, sub_nonpos] at ha0,
+      simpa },
+    { simp only [max_eq_right ha0],
+      rw [← (reduced_cost _ _ _).mul_assoc],
+      dsimp only [a],
+      rw [← matrix.mul_assoc (reduced_cost _ _ _ ⬝ _ ), ← mul_eq_mul,
+        ← mul_eq_mul, mul_inv_cancel (ne_of_lt hs).symm, one_mul],
+      simp [le_refl] } }
+end
+
+lemma optimal_of_reduced_cost_nonneg {B : prebasis m n} {A_bar : matrix (fin m) (fin n) ℚ}
+  (b_bar : cvec m) (c : rvec n) {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
+  (hb : 0 ≤ b_bar) (hs : reduced_cost B A_bar c ≤ 0) : ∀ x, A_bar ⬝ x = b_bar → 0 ≤ x →
+  c ⬝ x ≤ c ⬝ solution_of_basis B A_bar b_bar :=
+begin
+  assume x hAx h0x,
+  rw [objective_function_eq hAx hA_bar, solution_of_basis, hA_bar, inverse_one, matrix.mul_one,
+    ← le_sub_iff_add_le', ← matrix.mul_assoc, sub_self],
+  exact matrix.mul_nonpos_of_nonpos_of_nonneg
+    (matrix.mul_nonpos_of_nonpos_of_nonneg hs (pequiv_nonneg _)) h0x
+end
+
+end simplex
 
 -- end prebasis
 
@@ -628,242 +734,242 @@ end
 -- def solution_of_basis (A : matrix (fin m) (fin n) ℚ) (b : cvec m) (B : prebasis m n) : cvec n :=
 -- minor 1 id B.1.nth ⬝ inverse (minor A id B.1.nth) ⬝ b
 
-local notation `£` := default _
+-- local notation `£` := default _
 
-@[simp] lemma univ_unique {α : Type*} [unique α] {h : fintype α} : @univ α h = {default α} :=
-finset.ext.2 $ λ x, by simpa using unique.eq_default x
+-- @[simp] lemma univ_unique {α : Type*} [unique α] {h : fintype α} : @univ α h = {default α} :=
+-- finset.ext.2 $ λ x, by simpa using unique.eq_default x
 
-lemma solution_of_basis_is_solution (A : matrix (fin m) (fin n) ℚ) (b : cvec m)
-  (B : prebasis m n) (hB : has_right_inverse (minor A id B.1.nth)) :
-  A ⬝ solution_of_basis A b B = b :=
-by rw [solution_of_basis, ← A.mul_assoc, ← A.mul_assoc,  ← minor_eq_minor_one_mul A,
-    mul_inverse hB, b.one_mul];
-  apply_instance
+-- lemma solution_of_basis_is_solution (A : matrix (fin m) (fin n) ℚ) (b : cvec m)
+--   (B : prebasis m n) (hB : has_right_inverse (minor A id B.1.nth)) :
+--   A ⬝ solution_of_basis A b B = b :=
+-- by rw [solution_of_basis, ← A.mul_assoc, ← A.mul_assoc,  ← minor_eq_minor_one_mul A,
+--     mul_inverse hB, b.one_mul];
+--   apply_instance
 
-/-- function used solely for proof of termination. Never executed -/
-def lex_objective_function (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : prebasis m n) : ℚ × rvec m :=
-((one_by_one_ring_equiv (fin 1) ℚ).to_equiv (minor c id B.1.nth ⬝ inverse (minor A id B.1.nth) ⬝ b),
-  minor c id B.1.nth ⬝ inverse (minor A id B.1.nth))
+-- /-- function used solely for proof of termination. Never executed -/
+-- def lex_objective_function (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : prebasis m n) : ℚ × rvec m :=
+-- ((one_by_one_ring_equiv (fin 1) ℚ).to_equiv (minor c id B.1.nth ⬝ inverse (minor A id B.1.nth) ⬝ b),
+--   minor c id B.1.nth ⬝ inverse (minor A id B.1.nth))
 
-lemma lex_objective_function_increasing (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : prebasis m n) (i : fin (n - m)) (j : fin m) :
-  lex_objective_function A c b B < lex_objective_function A c b (B.swap i j) :=
-begin
-  dsimp [lex_objective_function],
+-- lemma lex_objective_function_increasing (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : prebasis m n) (i : fin (n - m)) (j : fin m) :
+--   lex_objective_function A c b B < lex_objective_function A c b (B.swap i j) :=
+-- begin
+--   dsimp [lex_objective_function],
 
-end
+-- end
 
-def simplex [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) :
-  Π (B : array m (fin n))
-  (NB : array (n - m) (fin n))
-  (A_bar : matrix (fin m) (fin (n - m)) ℚ)
-  (c_B : rvec m) (c_N : rvec (n - m)) (b_bar : cvec m)
-  (pert : (matrix (fin m) (fin m) ℚ))
-  (pivots : ℕ),
-  ℕ × option
-  (array m (fin n) × -- basis
-  array (n - m) (fin n) × -- non basis
-  matrix (fin m) (fin (n - m)) ℚ × -- A_bar
-  (rvec m) × -- c_B
-  (rvec (n - m)) × --c_N
-  (cvec m) × --b_bar
-  matrix (fin m) (fin m) ℚ) -- pert)
-| B NB A_bar c_B c_N b_bar pert pivots :=
-let reduced_cost := c_N - c_B ⬝ A_bar in
-let i' := (list.fin_range (n - m)).find (λ i, 0 < column reduced_cost (fin 1) i) in
-match i' with
-| none := (pivots, some (B, NB, A_bar, c_B, c_N, b_bar, pert))
-| some i :=
-  let ratio_pert : fin m → pert_rat m := λ j : fin m,
-    (A_bar j i)⁻¹ • (b_bar j 0, row' pert (fin 1) j) in
-  let l := (list.fin_range m).filter (λ j, 0 < ratio_pert j) in
-  match l with
-  | [] := (pivots + 1, none)
-  | (a::l) :=
-  let j : fin m := list.argmin ratio_pert (a :: l) in
-  let ⟨B', NB', A_bar', c_B', c_N', b_bar', pert'⟩ :=
-    pivot A c b B NB i j in
-  have wf : true, from trivial,
-  simplex B' NB' A_bar' c_B' c_N' b_bar' pert' (pivots + 1)
-  end
-end
-using_well_founded {rel_tac := λ _ _, `[exact ⟨_, true_well_founded⟩],
-  dec_tac := tactic.assumption}
+-- def simplex [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) :
+--   Π (B : array m (fin n))
+--   (NB : array (n - m) (fin n))
+--   (A_bar : matrix (fin m) (fin (n - m)) ℚ)
+--   (c_B : rvec m) (c_N : rvec (n - m)) (b_bar : cvec m)
+--   (pert : (matrix (fin m) (fin m) ℚ))
+--   (pivots : ℕ),
+--   ℕ × option
+--   (array m (fin n) × -- basis
+--   array (n - m) (fin n) × -- non basis
+--   matrix (fin m) (fin (n - m)) ℚ × -- A_bar
+--   (rvec m) × -- c_B
+--   (rvec (n - m)) × --c_N
+--   (cvec m) × --b_bar
+--   matrix (fin m) (fin m) ℚ) -- pert)
+-- | B NB A_bar c_B c_N b_bar pert pivots :=
+-- let reduced_cost := c_N - c_B ⬝ A_bar in
+-- let i' := (list.fin_range (n - m)).find (λ i, 0 < column reduced_cost (fin 1) i) in
+-- match i' with
+-- | none := (pivots, some (B, NB, A_bar, c_B, c_N, b_bar, pert))
+-- | some i :=
+--   let ratio_pert : fin m → pert_rat m := λ j : fin m,
+--     (A_bar j i)⁻¹ • (b_bar j 0, row' pert (fin 1) j) in
+--   let l := (list.fin_range m).filter (λ j, 0 < ratio_pert j) in
+--   match l with
+--   | [] := (pivots + 1, none)
+--   | (a::l) :=
+--   let j : fin m := list.argmin ratio_pert (a :: l) in
+--   let ⟨B', NB', A_bar', c_B', c_N', b_bar', pert'⟩ :=
+--     pivot A c b B NB i j in
+--   have wf : true, from trivial,
+--   simplex B' NB' A_bar' c_B' c_N' b_bar' pert' (pivots + 1)
+--   end
+-- end
+-- using_well_founded {rel_tac := λ _ _, `[exact ⟨_, true_well_founded⟩],
+--   dec_tac := tactic.assumption}
 
-instance read_dec_pred (a : array m (fin n)) (i : fin n) :
-  decidable_pred (λ (k : fin m), array.read a k = i) := by apply_instance
-
-
-def find_optimal_solution_from_starting_basis [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : array m (fin n)) : ℕ × option (cvec n) :=
-let NB : array (n - m) (fin n) :=
-  vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
-let A_B := minor A id B.read in
-let A_N := minor A id NB.read in
-let pert := _root_.inverse A_B in
-let A_bar := pert ⬝ A_N in
-let c_B := minor c id B.read in
-let c_N := minor c id NB.read in
-let b_bar := pert ⬝ b in
-match simplex A c b B NB A_bar c_B c_N b_bar pert 0 with
-| (pivots, none) := (pivots, none)
-| (pivots, some ⟨B', NB', A_bar', c_B', c_N', b_bar', pert'⟩) := prod.mk pivots $
-some (λ i _,
-  match @fin.find _ (λ k, B'.read k = i) (read_dec_pred _ _) with
-  | none := 0
-  | some k := b_bar' k 0
-  end)
-end
-
-/- test code -/
-
-instance {m : ℕ} : inhabited (fin m.succ) := ⟨0⟩
+-- instance read_dec_pred (a : array m (fin n)) (i : fin n) :
+--   decidable_pred (λ (k : fin m), array.read a k = i) := by apply_instance
 
 
-def found_solution_is_feasible [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : array m (fin n)) : bool :=
-match find_optimal_solution_from_starting_basis A c b B with
-| (_, none) := tt
-| (_, some x) := (A ⬝ x = b ∧ 0 ≤ x : bool)
-end
+-- def find_optimal_solution_from_starting_basis [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : array m (fin n)) : ℕ × option (cvec n) :=
+-- let NB : array (n - m) (fin n) :=
+--   vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
+-- let A_B := minor A id B.read in
+-- let A_N := minor A id NB.read in
+-- let pert := _root_.inverse A_B in
+-- let A_bar := pert ⬝ A_N in
+-- let c_B := minor c id B.read in
+-- let c_N := minor c id NB.read in
+-- let b_bar := pert ⬝ b in
+-- match simplex A c b B NB A_bar c_B c_N b_bar pert 0 with
+-- | (pivots, none) := (pivots, none)
+-- | (pivots, some ⟨B', NB', A_bar', c_B', c_N', b_bar', pert'⟩) := prod.mk pivots $
+-- some (λ i _,
+--   match @fin.find _ (λ k, B'.read k = i) (read_dec_pred _ _) with
+--   | none := 0
+--   | some k := b_bar' k 0
+--   end)
+-- end
 
-def is_optimal_bool [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : array m (fin n)) : bool :=
-let NB : array (n - m) (fin n) :=
-  vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
-let A_B := minor A id B.read in
-let A_N := minor A id NB.read in
-let pert := _root_.inverse A_B in
-let A_bar := pert ⬝ A_N in
-let c_B := minor c id B.read in
-let c_N := minor c id NB.read in
-let b_bar := pert ⬝ b in
-match simplex A c b B NB A_N c_B c_N b_bar pert 0 with
-| (_, none) := tt
-| (_, some ⟨B', NB', A_bar', c_B', c_N', b_bar', pert'⟩) := c_N' - c_B' ⬝ A_bar' ≤ 0
-end
+-- /- test code -/
 
-def is_feasible_basis [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : array m (fin n)) : Prop :=
-let A_B := minor A id B.read in
-let NB : array (n - m) (fin n) :=
-  vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
-let A_N := minor A id NB.read in
-let pert := _root_.inverse A_B in
-let A_bar := pert ⬝ A_N in
-let c_B := minor c id B.read in
-let c_N := minor c id NB.read in
-let b_bar := pert ⬝ b in
-let x : cvec n := λ i _, match @fin.find _ (λ k, B.read k = i) (read_dec_pred _ _) with
-  | none := 0
-  | some k := b_bar k 0
-  end in
-(0 : cvec n) ≤ x ∧ A ⬝ x = b ∧ det A_B ≠ 0
-
-def finishing_basis [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : array m (fin n)) : option (array m (fin n)) :=
-let NB : array (n - m) (fin n) :=
-  vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
-let A_B := minor A id B.read in
-let A_N := minor A id NB.read in
-let pert := _root_.inverse A_B in
-let A_bar := pert ⬝ A_N in
-let c_B := minor c id B.read in
-let c_N := minor c id NB.read in
-let b_bar := pert ⬝ b in
-option.map prod.fst (simplex A c b B NB A_N c_B c_N b_bar pert 0).2
-
-def test  [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : array m (fin n)) :=
-let NB : array (n - m) (fin n) :=
-  vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
-let A_B := minor A id B.read in
-let A_N := minor A id NB.read in
-let pert := _root_.inverse A_B in
-let A_bar := pert ⬝ A_N in
-let c_B := minor c id B.read in
-let c_N := minor c id NB.read in
-let b_bar := pert ⬝ b in
-let reduced_cost := c_N - c_B ⬝ A_bar in
-let b_pert : fin m → pert_rat m := λ j : fin m,
-     (A_bar j ⟨0, sorry⟩)⁻¹ • (b_bar j 0, row' pert (fin 1) j) in
-let reduced_cost := c_N - c_B ⬝ A_bar in
-let i' := (list.fin_range (n - m)).find (λ i, 0 < column reduced_cost (fin 1) i) in
-match i' with
-| none := sorry
-| some i :=
-  let ratio_pert : fin m → pert_rat m := λ j : fin m,
-     (A_bar j i)⁻¹ • (b_bar j 0, row' pert (fin 1) j) in
-  let l := (list.fin_range m).filter (λ j, 0 < ratio_pert j) in ratio_pert end
---simplex A c b B NB A_N c_B c_N b_bar pert
-
-def objective_function_value (c : rvec n) (x : cvec n) := c ⬝ x
+-- instance {m : ℕ} : inhabited (fin m.succ) := ⟨0⟩
 
 
--- (list.fin_range (n - m)).find (λ i, 0 < column reduced_cost (fin 1) i)
+-- def found_solution_is_feasible [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : array m (fin n)) : bool :=
+-- match find_optimal_solution_from_starting_basis A c b B with
+-- | (_, none) := tt
+-- | (_, some x) := (A ⬝ x = b ∧ 0 ≤ x : bool)
+-- end
 
--- pivot A c b B NB
+-- def is_optimal_bool [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : array m (fin n)) : bool :=
+-- let NB : array (n - m) (fin n) :=
+--   vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
+-- let A_B := minor A id B.read in
+-- let A_N := minor A id NB.read in
+-- let pert := _root_.inverse A_B in
+-- let A_bar := pert ⬝ A_N in
+-- let c_B := minor c id B.read in
+-- let c_N := minor c id NB.read in
+-- let b_bar := pert ⬝ b in
+-- match simplex A c b B NB A_N c_B c_N b_bar pert 0 with
+-- | (_, none) := tt
+-- | (_, some ⟨B', NB', A_bar', c_B', c_N', b_bar', pert'⟩) := c_N' - c_B' ⬝ A_bar' ≤ 0
+-- end
 
-instance [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
-  (c : rvec n) (b : cvec m) (B : array m (fin n)) :
-  decidable (is_feasible_basis A c b B) :=
-by dunfold is_feasible_basis; apply_instance
+-- def is_feasible_basis [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : array m (fin n)) : Prop :=
+-- let A_B := minor A id B.read in
+-- let NB : array (n - m) (fin n) :=
+--   vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
+-- let A_N := minor A id NB.read in
+-- let pert := _root_.inverse A_B in
+-- let A_bar := pert ⬝ A_N in
+-- let c_B := minor c id B.read in
+-- let c_N := minor c id NB.read in
+-- let b_bar := pert ⬝ b in
+-- let x : cvec n := λ i _, match @fin.find _ (λ k, B.read k = i) (read_dec_pred _ _) with
+--   | none := 0
+--   | some k := b_bar k 0
+--   end in
+-- (0 : cvec n) ≤ x ∧ A ⬝ x = b ∧ det A_B ≠ 0
+
+-- def finishing_basis [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : array m (fin n)) : option (array m (fin n)) :=
+-- let NB : array (n - m) (fin n) :=
+--   vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
+-- let A_B := minor A id B.read in
+-- let A_N := minor A id NB.read in
+-- let pert := _root_.inverse A_B in
+-- let A_bar := pert ⬝ A_N in
+-- let c_B := minor c id B.read in
+-- let c_N := minor c id NB.read in
+-- let b_bar := pert ⬝ b in
+-- option.map prod.fst (simplex A c b B NB A_N c_B c_N b_bar pert 0).2
+
+-- def test  [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : array m (fin n)) :=
+-- let NB : array (n - m) (fin n) :=
+--   vector.to_array ⟨(list.fin_range n).filter (λ i, ¬ B.mem i), sorry⟩ in
+-- let A_B := minor A id B.read in
+-- let A_N := minor A id NB.read in
+-- let pert := _root_.inverse A_B in
+-- let A_bar := pert ⬝ A_N in
+-- let c_B := minor c id B.read in
+-- let c_N := minor c id NB.read in
+-- let b_bar := pert ⬝ b in
+-- let reduced_cost := c_N - c_B ⬝ A_bar in
+-- let b_pert : fin m → pert_rat m := λ j : fin m,
+--      (A_bar j ⟨0, sorry⟩)⁻¹ • (b_bar j 0, row' pert (fin 1) j) in
+-- let reduced_cost := c_N - c_B ⬝ A_bar in
+-- let i' := (list.fin_range (n - m)).find (λ i, 0 < column reduced_cost (fin 1) i) in
+-- match i' with
+-- | none := sorry
+-- | some i :=
+--   let ratio_pert : fin m → pert_rat m := λ j : fin m,
+--      (A_bar j i)⁻¹ • (b_bar j 0, row' pert (fin 1) j) in
+--   let l := (list.fin_range m).filter (λ j, 0 < ratio_pert j) in ratio_pert end
+-- --simplex A c b B NB A_N c_B c_N b_bar pert
+
+-- def objective_function_value (c : rvec n) (x : cvec n) := c ⬝ x
 
 
--- def ex.A := list.to_matrix 3 4 [[12,-1,1,1],
---                      [1,1.45,1,0],
---                      [1,2,0,1]]
+-- -- (list.fin_range (n - m)).find (λ i, 0 < column reduced_cost (fin 1) i)
 
--- def ex.c : rvec 4 := λ _ i, (list.nth_le [1, 1.2, 1, 1.3] i sorry)
--- --#eval ex.c
--- def ex.b : cvec 3 := (λ i _, (list.nth_le [2, 2, 4] i sorry))
+-- -- pivot A c b B NB
+
+-- instance [inhabited (fin m)] (A : matrix (fin m) (fin n) ℚ)
+--   (c : rvec n) (b : cvec m) (B : array m (fin n)) :
+--   decidable (is_feasible_basis A c b B) :=
+-- by dunfold is_feasible_basis; apply_instance
+
+
+-- -- def ex.A := list.to_matrix 3 4 [[12,-1,1,1],
+-- --                      [1,1.45,1,0],
+-- --                      [1,2,0,1]]
+
+-- -- def ex.c : rvec 4 := λ _ i, (list.nth_le [1, 1.2, 1, 1.3] i sorry)
+-- -- --#eval ex.c
+-- -- def ex.b : cvec 3 := (λ i _, (list.nth_le [2, 2, 4] i sorry))
+-- -- --#eval ex.b
+-- -- def ex.B : array 3 (fin 4) := list.to_array [0, 1, 3]
+
+-- -- def ex.NB : array 1 (fin 4) := list.to_array [2]
+
+-- -- def ex.A := list.to_matrix 2 5 [[1,1,0,1,0], [0,1,-1,0,1]]
+
+-- -- def ex.b : cvec 2 := (λ i _, (list.nth_le [8,0] i sorry))
+-- -- --#eval ex.b
+-- -- def ex.c : rvec 5 := λ _ i, (list.nth_le [1, 1, 1, 0, 0] i sorry)
+-- -- --#eval ex.c
+-- -- def ex.B : array 2 (fin 5) := list.to_array [3,4]
+
+-- def ex.A := list.to_matrix 3 7 [[1/4, - 8, -  1, 9, 1, 0, 0],
+--                                 [1/2, -12, -1/2, 3, 0, 1, 0],
+--                                 [  0,   0,    1, 0, 0, 0, 1]]
+
+-- def ex.b : cvec 3 := (λ i _, list.nth_le [0,0,1] i sorry)
 -- --#eval ex.b
--- def ex.B : array 3 (fin 4) := list.to_array [0, 1, 3]
-
--- def ex.NB : array 1 (fin 4) := list.to_array [2]
-
--- def ex.A := list.to_matrix 2 5 [[1,1,0,1,0], [0,1,-1,0,1]]
-
--- def ex.b : cvec 2 := (λ i _, (list.nth_le [8,0] i sorry))
--- --#eval ex.b
--- def ex.c : rvec 5 := λ _ i, (list.nth_le [1, 1, 1, 0, 0] i sorry)
+-- def ex.c : rvec 7 := λ _ i, (list.nth_le [3/4, -20, 1/2, -6, 0, 0, 0] i sorry)
 -- --#eval ex.c
--- def ex.B : array 2 (fin 5) := list.to_array [3,4]
+-- def ex.B : array 3 (fin 7) := list.to_array [4,5,6]
 
-def ex.A := list.to_matrix 3 7 [[1/4, - 8, -  1, 9, 1, 0, 0],
-                                [1/2, -12, -1/2, 3, 0, 1, 0],
-                                [  0,   0,    1, 0, 0, 0, 1]]
+-- -- #eval (found_solution_is_feasible ex.A ex.c ex.b ex.B)
 
-def ex.b : cvec 3 := (λ i _, list.nth_le [0,0,1] i sorry)
---#eval ex.b
-def ex.c : rvec 7 := λ _ i, (list.nth_le [3/4, -20, 1/2, -6, 0, 0, 0] i sorry)
---#eval ex.c
-def ex.B : array 3 (fin 7) := list.to_array [4,5,6]
+-- #eval (find_optimal_solution_from_starting_basis ex.A ex.c ex.b ex.B)
+-- --set_option trace.fun_info true
+-- #eval (is_optimal_bool ex.A ex.c ex.b ex.B)
 
--- #eval (found_solution_is_feasible ex.A ex.c ex.b ex.B)
+-- -- (some [[2064/445]])
+-- -- (some [[6401/1895]])
+-- #eval (is_feasible_basis ex.A ex.c ex.b ex.B : bool)
+-- -- #eval (show matrix _ _ ℚ, from minor ex.A id ex.B.read) *
+-- --   _root_.inverse (show matrix _ _ ℚ, from minor ex.A id ex.B.read )
+-- -- #eval ((1 : cvec 1) - (minor ex.c id ex.B.read) ⬝
+-- --   _root_.inverse (minor ex.A id ex.B.read) ⬝
+-- --   (minor ex.A id ex.NB.read))
 
-#eval (find_optimal_solution_from_starting_basis ex.A ex.c ex.b ex.B)
---set_option trace.fun_info true
-#eval (is_optimal_bool ex.A ex.c ex.b ex.B)
+-- #eval finishing_basis ex.A ex.c ex.b ex.B
 
--- (some [[2064/445]])
--- (some [[6401/1895]])
-#eval (is_feasible_basis ex.A ex.c ex.b ex.B : bool)
--- #eval (show matrix _ _ ℚ, from minor ex.A id ex.B.read) *
---   _root_.inverse (show matrix _ _ ℚ, from minor ex.A id ex.B.read )
--- #eval ((1 : cvec 1) - (minor ex.c id ex.B.read) ⬝
---   _root_.inverse (minor ex.A id ex.B.read) ⬝
---   (minor ex.A id ex.NB.read))
+-- #eval test ex.A ex.c ex.b ex.B
 
-#eval finishing_basis ex.A ex.c ex.b ex.B
-
-#eval test ex.A ex.c ex.b ex.B
-
-#eval (let x : cvec 4 := λ i _, list.nth_le [0, 80/89, 62/89, 196/89] i sorry in
-  let A := list.to_matrix 3 4 [[12, -1, 1, 1],
-                     [1, 1.45, 1, 0],
-                     [1, 2, 0, 1]]
-                     in A ⬝ x
- )
+-- #eval (let x : cvec 4 := λ i _, list.nth_le [0, 80/89, 62/89, 196/89] i sorry in
+--   let A := list.to_matrix 3 4 [[12, -1, 1, 1],
+--                      [1, 1.45, 1, 0],
+--                      [1, 2, 0, 1]]
+--                      in A ⬝ x
+--  )

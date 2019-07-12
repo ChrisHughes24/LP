@@ -53,11 +53,14 @@ begin
   cases f i; simp
 end
 
-@[simp] lemma to_matrix_bot [has_one R] [has_zero R] : ((⊥ : pequiv m n).to_matrix : matrix m n R) = 0 := rfl
+@[simp] lemma to_matrix_bot [has_one R] [has_zero R] :
+  ((⊥ : pequiv m n).to_matrix : matrix m n R) = 0 := rfl
 
-lemma to_matrix_injective [zero_ne_one_class R] : function.injective (@to_matrix m n _ _ _ _ R _ _) :=
+lemma to_matrix_injective [zero_ne_one_class R] :
+  function.injective (@to_matrix m n _ _ _ _ R _ _) :=
 λ f g, not_imp_not.1 begin
-  simp only [matrix.ext_iff.symm, to_matrix, pequiv.ext_iff, classical.not_forall, exists_imp_distrib],
+  simp only [matrix.ext_iff.symm, to_matrix, pequiv.ext_iff,
+    classical.not_forall, exists_imp_distrib],
   assume i hi,
   use i,
   cases hf : f i with fi,
@@ -87,7 +90,8 @@ lemma single_mul_single_of_ne [ring R] {b₁ b₂ : n} (hb : b₁ ≠ b₂) (a :
 by rw [← to_matrix_trans, single_trans_single_of_ne hb, to_matrix_bot]
 
 @[simp] lemma single_mul_single_right [ring R] (a :  m) (b : n) (c : k)
-  (M : matrix k l R) : (single a b).to_matrix ⬝ ((single b c).to_matrix ⬝ M) = (single a c).to_matrix ⬝ M :=
+  (M : matrix k l R) : (single a b).to_matrix ⬝ ((single b c).to_matrix ⬝ M) =
+  (single a c).to_matrix ⬝ M :=
 by rw [← matrix.mul_assoc, single_mul_single]
 
 end pequiv

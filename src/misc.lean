@@ -1,4 +1,4 @@
-import data.matrix tactic.fin_cases linear_algebra.determinant
+import data.matrix tactic.fin_cases linear_algebra.determinant .matrix_pequiv
 
 local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := matrix.transpose
@@ -188,7 +188,20 @@ def matrix.ordered_comm_group [ordered_comm_group α] :
   ordered_comm_group (matrix m n α) :=
 pi.ordered_comm_group
 
-local attribute [instance] matrix.partial_order
+local attribute [instance] matrix.partial_order matrix.ordered_comm_group
+
+lemma matrix.mul_nonneg [ordered_semiring α] {M : matrix m n α}
+  {N : matrix n o α} (hM : 0 ≤ M) (hN : 0 ≤ N) : 0 ≤ M ⬝ N :=
+λ i j, by classical; exact finset.zero_le_sum' (λ _ _, mul_nonneg (hM _ _) (hN _ _))
+
+lemma matrix.mul_nonpos_of_nonpos_of_nonneg [ordered_semiring α] {M : matrix m n α}
+  {N : matrix n o α} (hM : M ≤ 0) (hN : 0 ≤ N) : M ⬝ N ≤ 0 :=
+λ i j, by classical; exact finset.sum_le_zero'
+  (λ _ _, mul_nonpos_of_nonpos_of_nonneg (hM _ _) (hN _ _))
+
+lemma pequiv_nonneg [decidable_eq m] [decidable_eq n] [linear_ordered_semiring α] (f : pequiv m n) :
+  (0 : matrix _ _ α) ≤ f.to_matrix :=
+λ i j, by rw [pequiv.to_matrix]; split_ifs; [exact zero_le_one, exact le_refl _]
 
 def matrix.decidable_le [partial_order α] [decidable_rel ((≤) : α → α → Prop)] :
   decidable_rel ((≤) : Π a b : matrix m n α, Prop) :=
@@ -242,6 +255,8 @@ instance : discrete_field (matrix (fin 1) (fin 1) ℚ) :=
   mul_comm := sorry,
   inv_zero := dec_trivial,
   ..matrix.ring }
+
+lemma inverse_eq_inv (a : matrix (fin 1) (fin 1) ℚ) : inverse a = a⁻¹ := rfl
 
 lemma one_by_one_mul_inv_cancel {M : matrix (fin 1) (fin 1) ℚ} (hM : M ≠ 0) :
   M ⬝ inverse M = 1 := sorry
