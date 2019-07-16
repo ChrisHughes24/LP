@@ -44,6 +44,12 @@ lemma has_left_inverse_one [ring R] [decidable_eq n] : (1 : matrix n n R).has_le
 lemma has_right_inverse_one [ring R] [decidable_eq n] : (1 : matrix n n R).has_right_inverse :=
 ⟨1, matrix.one_mul 1⟩
 
+lemma has_left_inverse_mul [ring R] [decidable_eq m] [decidable_eq n] {M : matrix l m R}
+  {N : matrix m n R} (hM : M.has_left_inverse) : N.has_left_inverse ↔ (M ⬝ N).has_left_inverse :=
+let ⟨Mi, hMi⟩ := hM in
+⟨λ ⟨Ni, hNi⟩, ⟨Ni ⬝ Mi, by rw [matrix.mul_assoc, ← Mi.mul_assoc, hMi, matrix.one_mul, hNi]⟩,
+  λ ⟨MNi, hMNi⟩, ⟨MNi ⬝ M, by rw [matrix.mul_assoc, hMNi]⟩⟩
+
 lemma has_right_inverse_iff_has_left_inverse [integral_domain R] [decidable_eq n]
   {M : matrix n n R} : has_left_inverse M ↔ has_right_inverse M := sorry
 
@@ -209,7 +215,7 @@ def matrix.decidable_le [partial_order α] [decidable_rel ((≤) : α → α →
 
 end matrix_order
 
-lemma mul_right_eq_of_mul_eq [ring R] {M : matrix l m R} {N : matrix m n R} {O : matrix l n R}
+lemma mul_right_eq_of_mul_eq [semiring R] {M : matrix l m R} {N : matrix m n R} {O : matrix l n R}
   {P : matrix n o R} (h : M ⬝ N = O) : M ⬝ (N ⬝ P) = O ⬝ P :=
 by classical; rw [← matrix.mul_assoc, h]
 
@@ -217,7 +223,7 @@ end
 
 
 section inverse
-variables {m n : ℕ} {}
+variables {l m n : ℕ} {}
 
 def comatrix (M : matrix (fin n) (fin n) ℚ) : matrix (fin n) (fin n) ℚ :=
 begin
@@ -240,6 +246,18 @@ lemma inverse_mul {M : matrix (fin m) (fin n) ℚ} (h : M.has_left_inverse) :
 /-- false with current inverse definition. True when `M` is square -/
 lemma mul_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_right_inverse) :
   M ⬝ inverse M = 1 := sorry
+
+lemma mul_inverse_rev {M : matrix (fin l) (fin m) ℚ} {N : matrix (fin m) (fin n) ℚ}
+  (hM : M.has_left_inverse) (hN : N.has_left_inverse) :
+  inverse (M ⬝ N) = inverse N ⬝ inverse M := sorry
+
+lemma inverse_has_right_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_left_inverse) :
+  M.inverse.has_right_inverse :=
+⟨_, inverse_mul h⟩
+
+lemma inverse_has_left_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_right_inverse) :
+  M.inverse.has_left_inverse :=
+⟨_, mul_inverse h⟩
 
 @[simp] lemma inverse_one : inverse (1 : matrix (fin n) (fin n) ℚ) = 1 := sorry
 
