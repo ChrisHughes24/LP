@@ -1,4 +1,5 @@
-import data.matrix tactic.fin_cases linear_algebra.determinant .matrix_pequiv
+import data.matrix tactic.fin_cases .matrix_pequiv
+import linear_algebra.finite_dimensional linear_algebra.matrix
 
 local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := matrix.transpose
@@ -9,61 +10,238 @@ namespace matrix
 
 section
 variables {l m n o : Type u} [fintype l] [fintype m] [fintype n] [fintype o]
-variables {one : Type u} [unique one]
+variables {one : Type u} [unique one] {R : Type*} --[comm_ring R]
 
-open function
+open function pequiv
 
 local notation `£` := default _
 
--- @[reducible] def cvec (R : Type*) (m : ℕ) := matrix (fin m) (fin 1) R
--- @[reducible] def rvec (R : Type*) (n : ℕ) := matrix (fin 1) (fin n) R
+instance matrix.vector_space [discrete_field R] : vector_space R (matrix m n R) :=
+{ ..matrix.module }
 
-variables {R : Type*}
-variables (A M : matrix m n R)
-variables (b : matrix m one R) (c x : matrix n one R)
+instance [discrete_field R] : finite_dimensional R (matrix m n R) :=
+begin
+  dsimp [matrix, finite_dimensional],
+  letI : is_noetherian R R := (show is_noetherian_ring R, by apply_instance),
+  exact @is_noetherian_pi R m (λ _, n → R) _ _ _ _
+    (λ _, is_noetherian_pi),
+end
 
-@[extensionality] lemma cvec.ext {x y : matrix m one R}
-  (h : ∀ i, x i £ = y i £) : x = y :=
-matrix.ext (λ i j, by fin_cases j; exact h _)
+@[simp] lemma linear_map.coe_mk {α β γ : Type*} [ring α] [add_comm_group β] [module α β]
+  [add_comm_group γ] [module α γ] (f : β → γ) (h₁ h₂) :
+  ((linear_map.mk f h₁ h₂ : β →ₗ[α] γ) : β → γ) = f := rfl
 
-@[extensionality] lemma rvec.ext {x y : matrix one n R}
- (h : ∀ j, x £ j = y £ j) : x = y :=
-matrix.ext (λ i j, by fin_cases i; exact h _)
+lemma mul_single_ext' [semiring R] (one : Type u) [unique one] [decidable_eq m] [decidable_eq n]
+  {A B : matrix m n R} (h : ∀ j, A ⬝ (single j (default one)).to_matrix = B ⬝
+    (single j (default one)).to_matrix) : A = B :=
+by ext i j; simpa [matrix_mul_apply] using congr_fun (congr_fun (h j) i) (default one)
+
+lemma single_mul_ext' [semiring R] (one : Type u) [unique one] [decidable_eq m] [decidable_eq n]
+  {A B : matrix m n R} (h : ∀ i, (single (default one) i).to_matrix ⬝ A =
+    (single (default one) i).to_matrix ⬝ B) : A = B :=
+by ext i j; simpa [mul_matrix_apply] using congr_fun (congr_fun (h i) (default one)) j
+
+lemma matrix.sum_mul [semiring R] {α : Type*} (s : finset α) (f : α → matrix m n R)
+  (M : matrix n o R) : s.sum f ⬝ M = s.sum (λ a, f a ⬝ M) :=
+by classical; exact finset.induction_on s (by simp)
+  (λ _ _ ha ih, by simp [finset.sum_insert ha, matrix.add_mul, ih])
+
+lemma matrix.mul_sum [semiring R] {α : Type*} (s : finset α) (f : α → matrix m n R)
+  (M : matrix l m R) : M ⬝ s.sum f = s.sum (λ a, M ⬝ f a) :=
+by classical; exact finset.induction_on s (by simp)
+  (λ _ _ ha ih, by simp [finset.sum_insert ha, matrix.mul_add, ih])
+
+lemma matrix_eq_sum_single_mul [semiring R] [decidable_eq m] (M : matrix m n R) :
+  M = finset.univ.sum (λ i : m, (single i i).to_matrix ⬝ M) :=
+by letI := classical.dec_eq n; exact single_mul_ext' punit (begin
+  assume i,
+  simp only [matrix.mul_sum, single_mul_single],
+  rw [finset.sum_eq_single i],
+  { simp },
+  { assume _ _ hbi,
+    rw [← matrix.mul_assoc, single_mul_single_of_ne hbi.symm, matrix.zero_mul] },
+  { simp }
+end)
+
+lemma matrix_eq_sum_mul_single [semiring R] [decidable_eq n] (M : matrix m n R) :
+  M = finset.univ.sum (λ j : n, M ⬝ (single j j).to_matrix) :=
+by letI := classical.dec_eq m; exact mul_single_ext' punit (begin
+  assume j,
+  simp only [matrix.sum_mul, single_mul_single],
+  rw [finset.sum_eq_single j],
+  { simp [matrix.mul_assoc] },
+  { assume _ _ hbj,
+    rw [matrix.mul_assoc, single_mul_single_of_ne hbj, matrix.mul_zero] },
+  { simp }
+end)
+
+lemma mul_eq_smul [comm_semiring R] {M : matrix n one R} (a : matrix one one R) :
+  M ⬝ a = a (default one) (default one) • M :=
+begin
+  ext i j,
+  rw unique.eq_default j,
+  simp [matrix.mul], exact mul_comm _ _
+end
+
+set_option class.instance_max_depth 100
+def linear_equiv_linear_map (m n one : Type u) (R : Type v) [fintype m] [fintype n]
+  [unique one] [comm_ring R] [decidable_eq m] [decidable_eq n] :
+  matrix m n R ≃ₗ[R] ((matrix n one R) →ₗ[R] (matrix m one R)) :=
+{ to_fun := λ A,
+  { to_fun := λ x, A ⬝ x,
+    add := matrix.mul_add A,
+    smul := matrix.mul_smul A },
+  inv_fun := λ f, finset.univ.sum
+    (λ j : n, f (single j (default one)).to_matrix ⬝
+        (single (default one) j).to_matrix),
+  left_inv := λ A, begin
+      conv_rhs {rw [matrix_eq_sum_mul_single A]},
+      dsimp, simp [matrix.mul_assoc],
+    end,
+  right_inv := λ f, linear_map.ext $ λ v, begin
+      dsimp,
+      rw [matrix.sum_mul],
+      simp only [matrix.mul_assoc, mul_eq_smul, (f.map_smul _ _).symm, finset.sum_hom f],
+      simp only [(mul_eq_smul _).symm],
+      conv_rhs { rw [matrix_eq_sum_single_mul v] },
+      simp,
+    end,
+  add := by simp only [matrix.add_mul]; intros; refl,
+  smul := λ f g, linear_map.ext $ λ x, by dsimp; simp only [matrix.smul_mul]; refl }
+
+lemma linear_equiv_linear_map_comp [comm_ring R] [decidable_eq m] [decidable_eq n] [decidable_eq o]
+  {M : matrix m n R} {N : matrix n o R} :
+  (linear_equiv_linear_map m o one R).to_equiv (M ⬝ N) =
+  ((linear_equiv_linear_map m n one R).to_equiv M).comp
+    ((linear_equiv_linear_map n o one R).to_equiv N) :=
+linear_map.ext $ matrix.mul_assoc M N
+
+lemma linear_equiv_linear_map_one [comm_ring R] [decidable_eq n] :
+  (linear_equiv_linear_map n n one R).to_equiv (1 : matrix n n R) = linear_map.id :=
+linear_map.ext matrix.one_mul
+
+def ring_equiv_linear_map (n one : Type u) (R : Type v) [fintype n]
+  [unique one] [comm_ring R] [decidable_eq n] :
+  matrix n n R ≃r ((matrix n one R) →ₗ[R] (matrix n one R)) :=
+{ hom :=
+  { map_add := (linear_equiv_linear_map n n one R).add,
+    map_mul := @linear_equiv_linear_map_comp _ _ _ _ _ _ _ _ _ _ _ _ _,
+    map_one := @linear_equiv_linear_map_one _ _ _ _ _ _ _ },
+  ..linear_equiv_linear_map n n one R }
 
 /-- the same as row free if `R` is a field -/
-def has_right_inverse [ring R] [decidable_eq m] (M : matrix m n R) : Prop :=
+def has_right_inverse [semiring R] [decidable_eq m] (M : matrix m n R) : Prop :=
 ∃ N : matrix n m R, M ⬝ N = 1
 
 /-- the same as column free if `R` is a field -/
-def has_left_inverse [ring R] [decidable_eq n] (M : matrix m n R) : Prop :=
+def has_left_inverse [semiring R] [decidable_eq n] (M : matrix m n R) : Prop :=
 ∃ N : matrix n m R, N ⬝ M = 1
 
-lemma has_left_inverse_one [ring R] [decidable_eq n] : (1 : matrix n n R).has_left_inverse :=
+lemma has_left_inverse_one [semiring R] [decidable_eq n] : (1 : matrix n n R).has_left_inverse :=
 ⟨1, matrix.one_mul 1⟩
 
-lemma has_right_inverse_one [ring R] [decidable_eq n] : (1 : matrix n n R).has_right_inverse :=
+lemma has_right_inverse_one [semiring R] [decidable_eq n] : (1 : matrix n n R).has_right_inverse :=
 ⟨1, matrix.one_mul 1⟩
 
-lemma has_left_inverse_mul [ring R] [decidable_eq m] [decidable_eq n] {M : matrix l m R}
+lemma has_left_inverse_mul [semiring R] [decidable_eq m] [decidable_eq n] {M : matrix l m R}
   {N : matrix m n R} (hM : M.has_left_inverse) : N.has_left_inverse ↔ (M ⬝ N).has_left_inverse :=
 let ⟨Mi, hMi⟩ := hM in
 ⟨λ ⟨Ni, hNi⟩, ⟨Ni ⬝ Mi, by rw [matrix.mul_assoc, ← Mi.mul_assoc, hMi, matrix.one_mul, hNi]⟩,
   λ ⟨MNi, hMNi⟩, ⟨MNi ⬝ M, by rw [matrix.mul_assoc, hMNi]⟩⟩
 
-lemma has_right_inverse_iff_has_left_inverse [integral_domain R] [decidable_eq n]
-  {M : matrix n n R} : has_left_inverse M ↔ has_right_inverse M := sorry
+lemma has_right_inverse_mul [semiring R] [decidable_eq l] [decidable_eq m] {M : matrix l m R}
+  {N : matrix m n R} (hN : N.has_right_inverse) : M.has_right_inverse ↔ (M ⬝ N).has_right_inverse :=
+let ⟨Ni, hNi⟩ := hN in
+⟨λ ⟨Mi, hMi⟩, ⟨Ni ⬝ Mi, by rw [M.mul_assoc, ← N.mul_assoc, hNi, matrix.one_mul, hMi]⟩,
+  λ ⟨MNi, hMNi⟩, ⟨N ⬝ MNi, by rw [← matrix.mul_assoc, hMNi]⟩⟩
 
-lemma mul_right_inj [ring R] [decidable_eq m] {L M : matrix l m R} {N : matrix m n R}
+lemma mul_eq_one_comm [discrete_field R] [decidable_eq n] {M N : matrix n n R} :
+  M ⬝ N = 1 ↔ N ⬝ M = 1 :=
+by rw [← matrix.mul_eq_mul, ← matrix.mul_eq_mul,
+  ← (ring_equiv_linear_map n punit R).to_equiv.injective.eq_iff,
+    ← (ring_equiv_linear_map n punit R).to_equiv.injective.eq_iff,
+    is_ring_hom.map_mul (ring_equiv_linear_map n punit R).to_equiv,
+    is_ring_hom.map_one (ring_equiv_linear_map n punit R).to_equiv,
+    linear_map.mul_eq_one_comm,
+    ← is_ring_hom.map_mul (ring_equiv_linear_map n punit R).to_equiv,
+    ← is_ring_hom.map_one (ring_equiv_linear_map n punit R).to_equiv]
+
+lemma has_right_inverse_iff_has_left_inverse [discrete_field R] [decidable_eq n]
+  {M : matrix n n R} : has_right_inverse M ↔ has_left_inverse M :=
+by simp [has_left_inverse, has_right_inverse, mul_eq_one_comm]
+
+lemma mul_right_inj [semiring R] [decidable_eq m] {L M : matrix l m R} {N : matrix m n R}
   (hN : N.has_right_inverse) : L ⬝ N = M ⬝ N ↔ L = M :=
 let ⟨I, hI⟩ := hN in
 ⟨λ h, by rw [← L.mul_one, ← hI, ← matrix.mul_assoc, h, matrix.mul_assoc, hI, matrix.mul_one],
   λ h, by rw h⟩
 
-lemma mul_left_inj [ring R] [decidable_eq m] {L : matrix l m R} {M N : matrix m n R}
+lemma mul_left_inj [semiring R] [decidable_eq m] {L : matrix l m R} {M N : matrix m n R}
   (hL : L.has_left_inverse) : L ⬝ M = L ⬝ N ↔ M = N :=
 let ⟨I, hI⟩ := hL in
 ⟨λ h, by rw [← M.one_mul, ← hI, matrix.mul_assoc, h, ← matrix.mul_assoc, hI, matrix.one_mul],
   λ h, by rw h⟩
+
+section inverse
+
+variables [discrete_field R]
+
+/- noncomputable inverse function for square matrices,
+  returns `0` for noninvertible matrices -/
+noncomputable def inverse (M : matrix n n R) : matrix n n R :=
+by classical; exact if h : has_left_inverse M then classical.some h else 0
+
+lemma inverse_mul [decidable_eq n] {M : matrix n n R} (h : M.has_left_inverse) : inverse M ⬝ M = 1 :=
+begin
+  rw [inverse, dif_pos],
+  swap,
+  convert h,
+  convert classical.some_spec h, funext, congr
+end
+
+/-- false with current inverse definition. True when `M` is square -/
+lemma mul_inverse [decidable_eq n] {M : matrix n n R} (h : M.has_right_inverse) :
+  M ⬝ inverse M = 1 :=
+by rw [mul_eq_one_comm, inverse_mul (has_right_inverse_iff_has_left_inverse.1 h)]
+
+lemma mul_inverse_rev [decidable_eq n] {M : matrix n n R} {N : matrix n n R}
+  (hM : M.has_left_inverse) (hN : N.has_left_inverse) :
+  inverse (M ⬝ N) = inverse N ⬝ inverse M :=
+by rw [← mul_left_inj hN, ← matrix.mul_assoc,
+  mul_inverse (has_right_inverse_iff_has_left_inverse.2 hN), matrix.one_mul,
+  ← mul_left_inj hM, mul_inverse (has_right_inverse_iff_has_left_inverse.2 hM),
+  ← matrix.mul_assoc, mul_inverse
+  (has_right_inverse_iff_has_left_inverse.2 ((has_left_inverse_mul hM).1 hN))]
+
+lemma inverse_has_right_inverse [decidable_eq n] {M : matrix n n R} (h : M.has_left_inverse) :
+  M.inverse.has_right_inverse :=
+⟨_, inverse_mul h⟩
+
+lemma inverse_has_left_inverse [decidable_eq n] {M : matrix n n R} (h : M.has_right_inverse) :
+  M.inverse.has_left_inverse :=
+⟨_, mul_inverse h⟩
+
+lemma eq_inverse_of_mul_eq_one [decidable_eq n] {M N : matrix n n R} (h : M ⬝ N = 1) :
+  M = inverse N :=
+by rw [← matrix.one_mul (inverse N), ← h, matrix.mul_assoc, mul_inverse
+    (has_right_inverse_iff_has_left_inverse.2 ⟨_, h⟩), matrix.mul_one]
+
+@[simp] lemma inverse_one [decidable_eq n] : inverse (1 : matrix n n R) = 1 :=
+(eq_inverse_of_mul_eq_one (matrix.one_mul 1)).symm
+
+@[simp] lemma inverse_zero : inverse (0 : matrix n n R) = 0 :=
+by letI := classical.dec_eq n; exact
+if h01 : (0 : matrix n n R) = 1
+then (eq_inverse_of_mul_eq_one $ by rw [h01, matrix.one_mul]).symm
+else begin
+  rw [inverse, dif_neg],
+  rintros ⟨M, h⟩,
+  rw [matrix.mul_zero] at h,
+  apply h01, convert h
+end
+
+end inverse
+
 -- lemma minor_mul [ring R] (M : matrix m n R) (N : matrix n o R) (row : l → m) :
 --   minor M row id ⬝ N = minor (M ⬝ N) row id := rfl
 
@@ -155,14 +333,14 @@ let ⟨I, hI⟩ := hL in
 --   add := λ x y, rfl,
 --   smul := λ c x, rfl }
 
-def to_lin' (one : Type u) [unique one] [comm_ring R] (A : matrix m n R) :
-  matrix n one R →ₗ[R] matrix m one R :=
-{ to_fun := (⬝) A,
-  add := matrix.mul_add _,
-  smul := matrix.mul_smul _, }
+-- def to_lin' (one : Type u) [unique one] [comm_ring R] (A : matrix m n R) :
+--   matrix n one R →ₗ[R] matrix m one R :=
+-- { to_fun := (⬝) A,
+--   add := matrix.mul_add _,
+--   smul := matrix.mul_smul _, }
 
-def is_invertible [comm_ring R] : Prop :=
-bijective (A.to_lin' punit : matrix n punit R → matrix m punit R)
+-- def is_invertible [comm_ring R] : Prop :=
+-- bijective (A.to_lin' punit : matrix n punit R → matrix m punit R)
 
 def one_by_one_equiv (one R : Type*) [unique one] [ring R] [decidable_eq one] :
   matrix one one R ≃ R :=
@@ -221,73 +399,57 @@ by classical; rw [← matrix.mul_assoc, h]
 
 end
 
-
-section inverse
-variables {l m n : ℕ} {}
-
-def comatrix (M : matrix (fin n) (fin n) ℚ) : matrix (fin n) (fin n) ℚ :=
-begin
-  cases n,
-  { exact fin.elim0 },
-  { exact λ i j, (-1) ^ (i + j : ℕ) * det (minor M
-      (λ i' : fin n, if i'.1 < i.1 then i'.cast_succ
-        else i'.succ)
-      (λ j' : fin n, if j'.1 < j.1 then j'.cast_succ
-        else j'.succ)) }
-end
-
-def inverse (M : matrix (fin m) (fin n) ℚ) : matrix (fin n) (fin m) ℚ :=
-if h : m = n then by subst h; exact (det M)⁻¹ • (comatrix M)ᵀ else 0
-#eval inverse (λ i j : fin 1, 0) 0 0
-/-- false with current inverse definition. True when `M` is square -/
-lemma inverse_mul {M : matrix (fin m) (fin n) ℚ} (h : M.has_left_inverse) :
-  inverse M ⬝ M = 1 := sorry
-
-/-- false with current inverse definition. True when `M` is square -/
-lemma mul_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_right_inverse) :
-  M ⬝ inverse M = 1 := sorry
-
-lemma mul_inverse_rev {M : matrix (fin l) (fin m) ℚ} {N : matrix (fin m) (fin n) ℚ}
-  (hM : M.has_left_inverse) (hN : N.has_left_inverse) :
-  inverse (M ⬝ N) = inverse N ⬝ inverse M := sorry
-
-lemma inverse_has_right_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_left_inverse) :
-  M.inverse.has_right_inverse :=
-⟨_, inverse_mul h⟩
-
-lemma inverse_has_left_inverse {M : matrix (fin m) (fin n) ℚ} (h : M.has_right_inverse) :
-  M.inverse.has_left_inverse :=
-⟨_, mul_inverse h⟩
-
-@[simp] lemma inverse_one : inverse (1 : matrix (fin n) (fin n) ℚ) = 1 := sorry
-
-lemma mul_eq_one_comm {M N : matrix (fin n) (fin n) ℚ} :
-  M ⬝ N = 1 ↔ N ⬝ M = 1 := sorry
-
-instance : discrete_field (matrix (fin 1) (fin 1) ℚ) :=
-{ inv := inverse,
-  zero_ne_one := mt (matrix.ext_iff).2 (λ h, absurd (h 0 0) dec_trivial),
-  mul_inv_cancel := sorry,
-  inv_mul_cancel := sorry,
-  has_decidable_eq := by apply_instance,
-  mul_comm := sorry,
-  inv_zero := dec_trivial,
+instance : comm_ring (matrix (fin 1) (fin 1) ℚ) :=
+{ mul_comm := λ a b, matrix.ext $ λ i j, by fin_cases i; fin_cases j;
+    simp [matrix.mul]; exact mul_comm _ _,
   ..matrix.ring }
 
-lemma inverse_eq_inv (a : matrix (fin 1) (fin 1) ℚ) : inverse a = a⁻¹ := rfl
+/- should be changed once there is a computable matrix inverse -/
+instance : discrete_field (matrix (fin 1) (fin 1) ℚ) :=
+have mul_inv : ∀ (M : matrix (fin 1) (fin 1) ℚ), M ≠ 0 →
+    (λ i j, M i j) ⬝ (λ i j, (M i j)⁻¹) = 1,
+  begin
+    assume M h,
+    ext i j,
+    fin_cases i, fin_cases j,
+    have h : M ⟨0, zero_lt_one⟩ ⟨0, zero_lt_one⟩ ≠ 0,
+      from λ hM, h (matrix.ext $ λ i j, by fin_cases i; fin_cases j; assumption),
+    simp [matrix.mul, mul_inv_cancel h]
+  end,
+{ inv := λ M i j, (M i j)⁻¹,
+  zero_ne_one := mt (matrix.ext_iff).2 (λ h, absurd (h 0 0) dec_trivial),
+  mul_inv_cancel := mul_inv,
+  inv_mul_cancel := λ M h, by rw [← mul_inv _ h, mul_comm]; refl,
+  has_decidable_eq := by apply_instance,
+  inv_zero := dec_trivial,
+  ..matrix.comm_ring }
+
+lemma inv_eq_inverse (a : matrix (fin 1) (fin 1) ℚ) : a⁻¹ = inverse a :=
+if ha : a = 0 then by simp [ha]
+else eq_inverse_of_mul_eq_one (by rw [← matrix.mul_eq_mul, inv_mul_cancel ha])
 
 lemma one_by_one_mul_inv_cancel {M : matrix (fin 1) (fin 1) ℚ} (hM : M ≠ 0) :
-  M ⬝ inverse M = 1 := sorry
+  M ⬝ inverse M = 1 :=
+by rw [← matrix.mul_eq_mul, ← inv_eq_inverse, mul_inv_cancel hM]
 
 lemma one_by_one_inv_mul_cancel {M : matrix (fin 1) (fin 1) ℚ} (hM : M ≠ 0) :
-  inverse M ⬝ M = 1 := sorry
-
-end inverse
+  inverse M ⬝ M = 1 :=
+by rw [← matrix.mul_eq_mul, ← inv_eq_inverse, inv_mul_cancel hM]
 
 end matrix
+open pequiv
 
+variables {l m n o : Type} [fintype l] [fintype m] [fintype n] [fintype o] {R : Type*}
 
+lemma mul_single_ext [semiring R] [decidable_eq m] [decidable_eq n]
+  {A B : matrix m n R} (h : ∀ j, A ⬝ (single j (0 : fin 1)).to_matrix = B ⬝
+    (single j (0 : fin 1)).to_matrix) : A = B :=
+by ext i j; simpa [matrix_mul_apply] using congr_fun (congr_fun (h j) i) 0
 
+lemma single_mul_ext [semiring R] [decidable_eq m] [decidable_eq n]
+  {A B : matrix m n R} (h : ∀ i, (single (0 : fin 1) i).to_matrix ⬝ A =
+    (single (0 : fin 1) i).to_matrix ⬝ B) : A = B :=
+by ext i j; simpa [mul_matrix_apply] using congr_fun (congr_fun (h i) 0) j
 
 section lex
 
@@ -317,20 +479,20 @@ lemma array.mem_decidable {α : Type*} [decidable_eq α] {n : ℕ} {a : array n 
   decidable_pred (∈ a) :=
 λ _, show decidable ∃ _, _, by apply_instance
 
-namespace vector
-variables {α : Type*} [decidable_eq α] {n : ℕ}
+-- namespace vector
+-- variables {α : Type*} [decidable_eq α] {n : ℕ}
 
-def update_nth (a : α) (i : fin n) (v : vector α n) : vector α n :=
-⟨v.to_list.update_nth i a, by erw [list.update_nth_length, v.2]⟩
+-- def update_nth (a : α) (i : fin n) (v : vector α n) : vector α n :=
+-- ⟨v.to_list.update_nth i a, by erw [list.update_nth_length, v.2]⟩
 
-@[simp] lemma nth_update_nth (a : α) (i : fin n) (v : vector α n) :
-  (v.update_nth a i).nth i = a :=
-option.some_inj.1 (by rw [update_nth, nth, ← list.nth_le_nth];
-  convert list.nth_update_nth_of_lt a (show (i : ℕ) < v.1.length, from v.2.symm ▸ i.2))
+-- @[simp] lemma nth_update_nth (a : α) (i : fin n) (v : vector α n) :
+--   (v.update_nth a i).nth i = a :=
+-- option.some_inj.1 (by rw [update_nth, nth, ← list.nth_le_nth];
+--   convert list.nth_update_nth_of_lt a (show (i : ℕ) < v.1.length, from v.2.symm ▸ i.2))
 
-lemma nth_update_nth_of_ne {i j : fin n} (v : vector α n) (h : i ≠ j) (a : α) :
-  (v.update_nth a i).nth j = v.nth j :=
-by cases v; erw [← option.some_inj, update_nth, nth, ← list.nth_le_nth,
-    list.nth_update_nth_ne _ _ (fin.vne_of_ne h), nth, ← list.nth_le_nth]; refl
+-- lemma nth_update_nth_of_ne {i j : fin n} (v : vector α n) (h : i ≠ j) (a : α) :
+--   (v.update_nth a i).nth j = v.nth j :=
+-- by cases v; erw [← option.some_inj, update_nth, nth, ← list.nth_le_nth,
+--     list.nth_update_nth_ne _ _ (fin.vne_of_ne h), nth, ← list.nth_le_nth]; refl
 
-end vector
+-- end vector
