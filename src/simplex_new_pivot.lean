@@ -758,56 +758,35 @@ begin
     (matrix.mul_nonpos_of_nonpos_of_nonneg hs (pequiv_nonneg _)) h0x
 end
 
-def choose_pivot_column (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
+def choose_pivot_column (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
   (c : rvec n) : option (fin (n - m)) :=
-(fin.find (λ j : fin n, ∃ h : (B.nonbasis.symm j).is_some,
-  0 < reduced_cost B A_bar c ⬝ (single (option.get h) (0 : fin 1)).to_matrix)).bind
-    B.nonbasis.symm
+(fin.find (λ s : fin (n - m), 0 < reduced_cost B A_bar c ⬝ (single s (0 : fin 1)).to_matrix))
 
 lemma choose_pivot_column_eq_none (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
   (b_bar : cvec m) (c : rvec n) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
   (h0b : 0 ≤ b_bar)
-  (h : choose_pivot_column B A_bar b_bar c = none) :
+  (h : choose_pivot_column B A_bar c = none) :
   is_optimal_basis B A_bar b_bar c :=
 is_optimal_basis_of_reduced_cost_nonpos _ _ hA_bar h0b $
   begin
-    rw [choose_pivot_column, option.bind_eq_none] at h,
-    have : ∀ j, j ∉ fin.find (λ j : fin n, ∃ h : (B.nonbasis.symm j).is_some,
-      0 < reduced_cost B A_bar c ⬝ (single (option.get h) (0 : fin 1)).to_matrix),
-    { assume j hj,
-      cases option.is_some_iff_exists.1 (fin.find_spec _ hj).fst with s hs,
-      exact h s j hj hs },
-    rw [← option.eq_none_iff_forall_not_mem, fin.find_eq_none_iff] at this,
-    rw [rvec_le_iff],
-    assume j,
-    refine le_of_not_gt (λ h0j, _),
-    have hj : ↥(B.nonbasis.symm (B.nonbasisg j)).is_some,
-      from option.is_some_iff_exists.2 ⟨j, nonbasis_nonbasisg _ _⟩,
-    have hjg : j = option.get hj, { rw [← option.some_inj, option.some_get, nonbasis_nonbasisg] },
-    exact this (B.nonbasisg j) ⟨hj, by { rw ← hjg, rwa [matrix.zero_mul] at h0j} ⟩
+    rw rvec_le_iff,
+    simpa only [matrix.zero_mul, not_lt] using fin.find_eq_none_iff.1 h
   end
 
 lemma choose_pivot_column_spec (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
   (b_bar : cvec m) (c : rvec n) (s : fin (n - m)) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
-  (h0b : 0 ≤ b_bar) (h : choose_pivot_column B A_bar b_bar c = some s) :
+  (h0b : 0 ≤ b_bar) (h : choose_pivot_column B A_bar c = some s) :
   0 < reduced_cost B A_bar c ⬝ (single s (0 : fin 1)).to_matrix :=
-begin
-  rw [choose_pivot_column, option.bind_eq_some'] at h,
-  cases h with j hj,
-  have := fin.find_spec _ hj.1,
-  have hs : s = option.get this.fst,
-  { rw [← option.some_inj, option.some_get, hj.2] },
-  exact hs.symm ▸ this.snd
-end
+fin.find_spec _ h
 
 set_option class.instance_max_depth 60
 
 def choose_pivot_row (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
   (c : rvec n) (s : fin (n - m)) : option (fin m) :=
-(fin.find (λ j : fin n, ∃ h : (B.basis.symm j).is_some,
-  0 < pivot_element B A_bar (option.get h) s ∧
+fin.find (λ r : fin m,
+  0 < pivot_element B A_bar r s ∧
   ∀ i : fin m, ((0 : cvec 1) < pivot_element B A_bar i s) →
-    ratio B A_bar b_bar (option.get h) s ≤ ratio B A_bar b_bar i s)).bind B.basis.symm
+    ratio B A_bar b_bar r s ≤ ratio B A_bar b_bar i s)
 
 lemma choose_pivot_row_spec (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
   (b_bar : cvec m) (c : rvec n) (r : fin m) (s : fin (n - m))
@@ -815,47 +794,24 @@ lemma choose_pivot_row_spec (B : prebasis m n) (A_bar : matrix (fin m) (fin n) �
   0 < pivot_element B A_bar r s ∧
   ∀ i : fin m, 0 < pivot_element B A_bar i s →
     ratio B A_bar b_bar r s ≤ ratio B A_bar b_bar i s :=
-begin
-  rw [choose_pivot_row, option.mem_def, option.bind_eq_some'] at hr,
-  cases hr with j hj,
-  have hrj : r = option.get (fin.find_spec _ hj.1).fst,
-  { rw [← option.some_inj, option.some_get, ← hj.2] },
-  rw hrj,
-  exact (fin.find_spec _ hj.1).snd
-end
+fin.find_spec _ hr
 
 lemma choose_pivot_row_eq_none (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
   (b_bar : cvec m) (c : rvec n) (r : fin m) (s : fin (n - m))
   (hn : choose_pivot_row B A_bar b_bar c s = none) :
   pivot_element B A_bar r s ≤ 0 :=
 le_of_not_gt $ λ hpivot, begin
-  rw [choose_pivot_row, option.bind_eq_none] at hn,
+  rw [choose_pivot_row, fin.find_eq_none_iff] at hn,
   cases @finset.min_of_mem _ _
     ((univ.filter (λ j, 0 < pivot_element B A_bar j s)).image
       (λ i, ratio B A_bar b_bar i s)) (ratio B A_bar b_bar r s)
       (mem_image_of_mem _ (finset.mem_filter.2 ⟨mem_univ _, hpivot⟩)) with q hq,
   rcases mem_image.1 (mem_of_min hq) with ⟨i, hip, hiq⟩,
   subst hiq,
-  have : ∀ j : fin n, j ∉ fin.find (λ j : fin n, ∃ h : (B.basis.symm j).is_some,
-    0 < pivot_element B A_bar (option.get h) s ∧
-    ∀ i : fin m, 0 < pivot_element B A_bar i s →
-      ratio B A_bar b_bar (option.get h) s ≤ ratio B A_bar b_bar i s),
-  { assume j hj,
-    cases option.is_some_iff_exists.1 (fin.find_spec _ hj).fst with r hr,
-    exact hn _ _ hj hr },
-  rw [← option.eq_none_iff_forall_not_mem, fin.find_eq_none_iff] at this,
-  have hi : ↥(B.basis.symm (B.basisg i)).is_some,
-    from option.is_some_iff_exists.2 ⟨i, basis_basisg _ _⟩,
-  have hig : i = option.get hi, { rw [← option.some_inj, option.some_get, basis_basisg] },
-  exact this (B.basisg i) ⟨(option.is_some_iff_exists.2 ⟨i, basis_basisg _ _⟩),
-    begin
-      rw [← hig],
-      clear_aux_decl,
-      refine ⟨by simpa using hip, _⟩,
-      assume j hj,
-      refine min_le_of_mem (mem_image.2 ⟨j, _⟩) hq,
-      simp [hj]
-    end⟩
+  refine hn i ⟨(finset.mem_filter.1 hip).2, λ j hj, _⟩,
+  refine min_le_of_mem _ hq,
+  refine mem_image_of_mem _ _,
+  simpa using hj
 end
 
 lemma is_unbounded_of_choose_pivot_row_eq_none (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
@@ -898,7 +854,7 @@ def simplex : Π (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
     option.cases_on o (is_unbounded A_bar b_bar c)
       (λ P, is_optimal_basis P.1 A_bar b_bar c) }
 | B A_bar b_bar c hA_bar h0b :=
-  match choose_pivot_column B A_bar b_bar c,
+  match choose_pivot_column B A_bar c,
     (λ s, choose_pivot_column_spec B A_bar b_bar c s hA_bar h0b),
       choose_pivot_column_eq_none B A_bar b_bar c hA_bar h0b with
   | none,   _, hn := ⟨some ⟨B, A_bar, b_bar⟩, hn rfl⟩
@@ -930,8 +886,8 @@ tc (λ B C, ∃ hs : (choose_pivot_column B
       c (option.get hs)).is_some,
   C = B.swap (option.get hr) (option.get hs))
 
-#eval inverse (list.to_matrix 3 3
-  [[1,2,3],[0,1,5],[0,0,1]])
+-- #eval inverse (list.to_matrix 3 3
+--   [[1,2,3],[0,1,5],[0,0,1]])
 
 -- def ex.A := list.to_matrix 2 5 [[1,1,0,1,0],
 --                                 [0,1,-1,0,1]]
@@ -946,7 +902,7 @@ tc (λ B C, ∃ hs : (choose_pivot_column B
 
 -- #eval ex.A ⬝ ex.B.basis.to_matrixᵀ
 
--- #eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1.is_some
+-- #eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1
 
 def ex.A := list.to_matrix 3 7 [[1/4, - 8, -  1, 9, 1, 0, 0],
                                 [1/2, -12, -1/2, 3, 0, 1, 0],
@@ -960,7 +916,7 @@ def ex.B : prebasis 3 7 :=
   ⟨pequiv_of_vector ⟨[4, 5, 6], rfl⟩ dec_trivial,
     pre_nonbasis_of_vector ⟨[4,5,6], rfl⟩ dec_trivial, sorry, sorry, sorry⟩
 
---#eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1.is_some
+#eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1.is_some
 
 #eval (find_optimal_solution_from_starting_basis ex.A ex.c ex.b ex.B)
 --set_option trace.fun_info true

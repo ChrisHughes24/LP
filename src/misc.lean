@@ -1,5 +1,5 @@
 import data.matrix tactic.fin_cases .matrix_pequiv
-import linear_algebra.finite_dimensional linear_algebra.matrix
+import linear_algebra.finite_dimensional
 
 local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := matrix.transpose
@@ -20,12 +20,7 @@ instance matrix.vector_space [discrete_field R] : vector_space R (matrix m n R) 
 { ..matrix.module }
 
 instance [discrete_field R] : finite_dimensional R (matrix m n R) :=
-begin
-  dsimp [matrix, finite_dimensional],
-  letI : is_noetherian R R := (show is_noetherian_ring R, by apply_instance),
-  exact @is_noetherian_pi R m (λ _, n → R) _ _ _ _
-    (λ _, is_noetherian_pi),
-end
+@is_noetherian_pi R m _ _ _ _ _ (λ _, is_noetherian_pi)
 
 @[simp] lemma linear_map.coe_mk {α β γ : Type*} [ring α] [add_comm_group β] [module α β]
   [add_comm_group γ] [module α γ] (f : β → γ) (h₁ h₂) :
