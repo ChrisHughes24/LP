@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Chris Hughes
 -/
 
-import logic.basic data.fin
+import logic.basic data.fin data.array.lemmas
 
 universes u v
 
@@ -48,10 +48,10 @@ namespace array
 
 variables {n : ℕ} {α : Type*}
 
-@[simp] lemma read_foreach  (x : array n α)
-  (f : Π i : fin n, α → α) (i : fin n) :
-  (x.foreach f).read i = f i (x.read i) :=
-d_array.read_foreach x _ _
+-- @[simp] lemma read_foreach  (x : array n α)
+--   (f : Π i : fin n, α → α) (i : fin n) :
+--   (x.foreach f).read i = f i (x.read i) :=
+-- d_array.read_foreach x _ _
 
 @[simp] lemma not_mem_nil (a : α) (x : array 0 α) : a ∉ x :=
 λ ⟨i, _⟩, fin.elim0 i

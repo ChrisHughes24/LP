@@ -317,7 +317,7 @@ by rw [← to_matrix_refl, ← B.nonbasis_trans_nonbasis_symm, to_matrix_trans, 
   (B.basis.to_matrix : matrix _ _ ℚ) ⬝ B.basis.to_matrixᵀ = 1 :=
 by rw [← to_matrix_refl, ← B.basis_trans_basis_symm, to_matrix_trans, to_matrix_symm]
 
-lemma transpose_mul_add_tranpose_mul (B : prebasis m n) :
+lemma transpose_mul_add_transpose_mul (B : prebasis m n) :
   (B.basis.to_matrixᵀ ⬝ B.basis.to_matrix : matrix (fin n) (fin n) ℚ) +
   B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix  = 1 :=
 begin
@@ -371,7 +371,7 @@ begin
   { simp *; split; intros; simp * at * }
 end
 
-lemma swap_basis_transpose_apply_single_of_ne (B : prebasis m n) {r : fin m}
+lemma swap_basis_transpose_mul_single_of_ne (B : prebasis m n) {r : fin m}
   (s : fin (n - m)) {i : fin m} (hir : i ≠ r) :
   ((B.swap r s).basis.to_matrixᵀ : matrix (fin n) (fin m) ℚ) ⬝ (single i (0 : fin 1)).to_matrix =
   B.basis.to_matrixᵀ ⬝ (single i 0).to_matrix :=
@@ -384,7 +384,7 @@ begin
   {dsimp [single]; simp [*, B.injective_basisg.eq_iff]} <|> apply_instance
 end
 
-lemma swap_basis_transpose_apply_single (B : prebasis m n) (r : fin m) (s : fin (n - m)) :
+lemma swap_basis_transpose_mul_single (B : prebasis m n) (r : fin m) (s : fin (n - m)) :
   ((B.swap r s).basis.to_matrixᵀ : matrix (fin n) (fin m) ℚ) ⬝ (single r (0 : fin 1)).to_matrix =
   B.nonbasis.to_matrixᵀ ⬝ (single s (0 : fin 1)).to_matrix :=
 begin
@@ -443,12 +443,12 @@ begin
      mul_right_eq_of_mul_eq this, pivot_element],
   rw [pivot_element, matrix.mul_assoc, matrix.mul_assoc] at hpivot,
   by_cases h : i = r,
-  { simp only [h, swap_basis_transpose_apply_single, mul_right_eq_of_mul_eq hA_bar,
+  { simp only [h, swap_basis_transpose_mul_single, mul_right_eq_of_mul_eq hA_bar,
       one_by_one_inv_mul_cancel hpivot, inv_eq_inverse],
     simp },
   { have : ((single (0 : fin 1) r).to_matrix ⬝ (single i 0).to_matrix : cvec 1) = 0,
     { rw [← to_matrix_trans, single_trans_single_of_ne (ne.symm h), to_matrix_bot] },
-    simp [swap_basis_transpose_apply_single_of_ne _ _ h,
+    simp [swap_basis_transpose_mul_single_of_ne _ _ h,
       mul_right_eq_of_mul_eq hA_bar, this] }
 end
 
@@ -576,7 +576,7 @@ lemma basis_transpose_add_nonbasis_transpose_mul_nonbasis {B : prebasis m n}
   {A_bar : matrix (fin m) (fin n) ℚ} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
   (B.basis.to_matrixᵀ ⬝ A_bar + B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix) ⬝
   (1 - B.basis.to_matrixᵀ ⬝ A_bar ⬝ B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix) = 1 :=
-by rw [← transpose_mul_add_tranpose_mul B];
+by rw [← transpose_mul_add_transpose_mul B];
   simp [matrix.mul_add, matrix.add_mul, matrix.mul_neg, matrix.mul_assoc,
     mul_right_eq_of_mul_eq hA_bar,
     mul_right_eq_of_mul_eq (nonbasis_mul_basis_transpose _),
@@ -631,10 +631,10 @@ suffices A_bar ⬝ (B.swap r s).basis.to_matrixᵀ
 lemma cvec_eq_basis_add_nonbasis (B : prebasis m n) (x : cvec n) :
   x = B.basis.to_matrixᵀ ⬝ B.basis.to_matrix ⬝ x + B.nonbasis.to_matrixᵀ ⬝ B.nonbasis.to_matrix ⬝ x :=
 by simp only [(matrix.mul_assoc _ _ _).symm, (matrix.add_mul _ _ _).symm,
-  B.transpose_mul_add_tranpose_mul, matrix.one_mul]
+  B.transpose_mul_add_transpose_mul, matrix.one_mul]
 
 lemma objective_function_eq {B : prebasis m n}
-  {A_bar : matrix (fin m) (fin n) ℚ}  {b_bar : cvec m} {c : rvec n} {x : cvec n}
+  {A_bar : matrix (fin m) (fin n) ℚ} {b_bar : cvec m} {c : rvec n} {x : cvec n}
   (hAx : A_bar ⬝ x = b_bar) (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1) :
   c ⬝ x = c ⬝ B.basis.to_matrixᵀ ⬝ b_bar +
   reduced_cost B A_bar c ⬝ B.nonbasis.to_matrix ⬝ x :=
@@ -643,7 +643,7 @@ have B.basis.to_matrix ⬝ x = b_bar - A_bar ⬝ B.nonbasis.to_matrixᵀ
   by rw [eq_sub_iff_add_eq, ← (B.basis.to_matrix).one_mul, ← hA_bar,
     matrix.mul_assoc, matrix.mul_assoc, matrix.mul_assoc, matrix.mul_assoc,
     ← matrix.mul_add, ← matrix.mul_assoc, ← matrix.mul_assoc, ← matrix.add_mul,
-    transpose_mul_add_tranpose_mul, matrix.one_mul, hAx],
+    transpose_mul_add_transpose_mul, matrix.one_mul, hAx],
 begin
   conv_lhs {rw [cvec_eq_basis_add_nonbasis B x, matrix.mul_assoc, this]},
   simp [matrix.mul_add, matrix.mul_assoc, matrix.add_mul, reduced_cost]
@@ -875,7 +875,8 @@ def simplex : Π (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ)
     end
   end
 
-#print axioms simplex.simplex
+#print simplex.simplex._main._pack
+#print acc
 
 def rel (A : matrix (fin m) (fin n) ℚ) (b : cvec m) (c : rvec n) :
   prebasis m n → prebasis m n → Prop :=
@@ -902,42 +903,42 @@ tc (λ B C, ∃ hs : (choose_pivot_column B
 
 -- #eval ex.A ⬝ ex.B.basis.to_matrixᵀ
 
--- #eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1
+-- -- #eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1
 
-def ex.A := list.to_matrix 3 7 [[1/4, - 8, -  1, 9, 1, 0, 0],
-                                [1/2, -12, -1/2, 3, 0, 1, 0],
-                                [  0,   0,    1, 0, 0, 0, 1]]
+-- def ex.A := list.to_matrix 3 7 [[1/4, - 8, -  1, 9, 1, 0, 0],
+--                                 [1/2, -12, -1/2, 3, 0, 1, 0],
+--                                 [  0,   0,    1, 0, 0, 0, 1]]
 
-def ex.b : cvec 3 := (λ i _, list.nth_le [0,0,1] i sorry)
---#eval ex.b
-def ex.c : rvec 7 := λ _ i, (list.nth_le [3/4, -20, 1/2, -6, 0, 0, 0] i sorry)
---#eval ex.c
-def ex.B : prebasis 3 7 :=
-  ⟨pequiv_of_vector ⟨[4, 5, 6], rfl⟩ dec_trivial,
-    pre_nonbasis_of_vector ⟨[4,5,6], rfl⟩ dec_trivial, sorry, sorry, sorry⟩
+-- def ex.b : cvec 3 := (λ i _, list.nth_le [0,0,1] i sorry)
+-- --#eval ex.b
+-- def ex.c : rvec 7 := λ _ i, (list.nth_le [3/4, -20, 1/2, -6, 0, 0, 0] i sorry)
+-- --#eval ex.c
+-- def ex.B : prebasis 3 7 :=
+--   ⟨pequiv_of_vector ⟨[4, 5, 6], rfl⟩ dec_trivial,
+--     pre_nonbasis_of_vector ⟨[4,5,6], rfl⟩ dec_trivial, sorry, sorry, sorry⟩
 
-#eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1.is_some
+-- #eval (simplex ex.B ex.A ex.b ex.c dec_trivial dec_trivial).1.is_some
 
-#eval (find_optimal_solution_from_starting_basis ex.A ex.c ex.b ex.B)
---set_option trace.fun_info true
-#eval (is_optimal_bool ex.A ex.c ex.b ex.B)
+-- #eval (find_optimal_solution_from_starting_basis ex.A ex.c ex.b ex.B)
+-- --set_option trace.fun_info true
+-- #eval (is_optimal_bool ex.A ex.c ex.b ex.B)
 
--- (some [[2064/445]])
--- (some [[6401/1895]])
-#eval (is_feasible_basis ex.A ex.c ex.b ex.B : bool)
--- #eval (show matrix _ _ ℚ, from minor ex.A id ex.B.read) *
---   _root_.inverse (show matrix _ _ ℚ, from minor ex.A id ex.B.read )
--- #eval ((1 : cvec 1) - (minor ex.c id ex.B.read) ⬝
---   _root_.inverse (minor ex.A id ex.B.read) ⬝
---   (minor ex.A id ex.NB.read))
+-- -- (some [[2064/445]])
+-- -- (some [[6401/1895]])
+-- #eval (is_feasible_basis ex.A ex.c ex.b ex.B : bool)
+-- -- #eval (show matrix _ _ ℚ, from minor ex.A id ex.B.read) *
+-- --   _root_.inverse (show matrix _ _ ℚ, from minor ex.A id ex.B.read )
+-- -- #eval ((1 : cvec 1) - (minor ex.c id ex.B.read) ⬝
+-- --   _root_.inverse (minor ex.A id ex.B.read) ⬝
+-- --   (minor ex.A id ex.NB.read))
 
-#eval finishing_basis ex.A ex.c ex.b ex.B
+-- #eval finishing_basis ex.A ex.c ex.b ex.B
 
-#eval test ex.A ex.c ex.b ex.B
+-- #eval test ex.A ex.c ex.b ex.B
 
-#eval (let x : cvec 4 := λ i _, list.nth_le [0, 80/89, 62/89, 196/89] i sorry in
-  let A := list.to_matrix 3 4 [[12, -1, 1, 1],
-                     [1, 1.45, 1, 0],
-                     [1, 2, 0, 1]]
-                     in A ⬝ x
- )
+-- #eval (let x : cvec 4 := λ i _, list.nth_le [0, 80/89, 62/89, 196/89] i sorry in
+--   let A := list.to_matrix 3 4 [[12, -1, 1, 1],
+--                      [1, 1.45, 1, 0],
+--                      [1, 2, 0, 1]]
+--                      in A ⬝ x
+--  )

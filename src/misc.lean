@@ -177,6 +177,46 @@ let ⟨I, hI⟩ := hL in
 ⟨λ h, by rw [← M.one_mul, ← hI, matrix.mul_assoc, h, ← matrix.mul_assoc, hI, matrix.one_mul],
   λ h, by rw h⟩
 
+def write [decidable_eq m] [decidable_eq n] (A : matrix m n R) (i : m) (j : n) (x : R) :
+  matrix m n R
+| i' j' := if i' = i ∧ j' = j then x else A i' j'
+
+@[simp] lemma write_apply [decidable_eq m] [decidable_eq n] (A : matrix m n R) (i : m) (j : n)
+  (x : R) : (A.write i j x) i j = x :=
+if_pos ⟨rfl, rfl⟩
+
+lemma write_apply_of_ne [decidable_eq m] [decidable_eq n] (A : matrix m n R) {i i' : m} {j j' : n}
+  (h : i' ≠ i ∨ j' ≠ j) (x : R) : (A.write i j x) i' j' = A i' j' :=
+if_neg (not_and_distrib.2 h)
+
+def write_row [decidable_eq m] (A : matrix m n R) (i : m) (x : n → R) :
+  matrix m n R
+| i' j := if i = i' then x j else A i' j
+
+def write_column [decidable_eq n] (A : matrix m n R) (j : n) (x : m → R) :
+  matrix m n R
+| i j' := if j = j' then x i else A i j'
+
+@[simp] lemma write_row_apply_of_eq [decidable_eq m] (A : matrix m n R) (i : m)
+  (j : n) (x : n → R) : (A.write_row i x) i j = x j :=
+if_pos rfl
+
+@[simp] lemma write_column_apply_of_eq [decidable_eq n] (A : matrix m n R) (i : m)
+  (j : n) (x : m → R) : (A.write_column j x) i j = x i :=
+if_pos rfl
+
+lemma write_row_apply [decidable_eq m] (A : matrix m n R) {i i' : m}
+  (j : n) (x : n → R) : (A.write_row i x) i' j = ite (i = i') (x j) (A i' j) := rfl
+
+lemma write_column_apply [decidable_eq n] (A : matrix m n R) (i : m) (j j' : n)
+  (x : m → R) : (A.write_column j x) i j' = ite (j = j') (x i) (A i j') := rfl
+
+lemma write_row_apply_of_ne [decidable_eq m] (A : matrix m n R) {i i' : m} (h : i ≠ i')
+  (j : n) (x : n → R) : (A.write_row i x) i' j = A i' j := dif_neg h
+
+lemma write_column_apply_of_ne [decidable_eq n] (A : matrix m n R) {j j' : n} (h : j ≠ j') (i : m)
+  (x : m → R) : (A.write_column j x) i j' = A i j' := dif_neg h
+
 section inverse
 
 variables [discrete_field R]
@@ -418,6 +458,9 @@ have mul_inv : ∀ (M : matrix (fin 1) (fin 1) ℚ), M ≠ 0 →
   has_decidable_eq := by apply_instance,
   inv_zero := dec_trivial,
   ..matrix.comm_ring }
+
+lemma inv_def (a : matrix (fin 1) (fin 1) ℚ) : a⁻¹ = (λ _ _, (a 0 0)⁻¹) :=
+by ext i j; fin_cases i; fin_cases j; refl
 
 lemma inv_eq_inverse (a : matrix (fin 1) (fin 1) ℚ) : a⁻¹ = inverse a :=
 if ha : a = 0 then by simp [ha]
