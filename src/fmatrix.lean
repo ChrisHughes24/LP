@@ -8,6 +8,7 @@ variables {l m n : ℕ}
 
 instance : has_add (fmatrix m n) := ⟨array.map₂ (+)⟩
 instance : has_zero (fmatrix m n) := ⟨mk_array _ 0⟩
+instance : has_neg (fmatrix m n) := ⟨array.map has_neg.neg⟩
 
 lemma add_def (a b : fmatrix m n) : a + b = a.map₂ (+) b := rfl
 
@@ -103,6 +104,9 @@ lemma read_foreach_aux (A : fmatrix m n) (f : fin m → fin n → ℚ → ℚ) :
 read_foreach_aux _ _ _ _ _ _ _ _ ((lt_or_eq_of_le (nat.succ_le_of_lt i.2)).elim
   or.inl (λ hi, or.inr ⟨hi, j.2⟩))
 
+def write_column (A : fmatrix m n) (i : fin m) (f : fin n → ℚ) : fmatrix m n :=
+(list.fin_range n).foldl (λ A j, A.write i j (f j)) A
+
 def to_matrix (A : fmatrix m n) : matrix (fin m) (fin n) ℚ
 | i j := A.read i j
 
@@ -124,7 +128,7 @@ let s : finset (fin m) := finset.univ in
 instance : has_mul (fmatrix n n) := ⟨mul⟩
 
 instance : has_one (fmatrix n n) :=
-⟨(0 : fmatrix n n).foreach (λ i j _, _)⟩
+⟨(0 : fmatrix n n).foreach (λ i j _, if i = j then 1 else 0)⟩
 
 instance : has_le (fmatrix m n) := ⟨λ A B, ∀ i, array.read A i ≤ array.read B i⟩
 

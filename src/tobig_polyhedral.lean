@@ -56,7 +56,7 @@ protected def matrix.row (A : matrix m n α) (row : m) : matrix unit n α :=
 
 lemma polyhedron_rowinE [ordered_ring α]
         (x: matrix n unit α) (A: matrix m n α) (b: matrix m unit α):
-    x ∈ (polyhedron A b) = ∀ i:m, (matrix.row4
+    x ∈ (polyhedron A b) = ∀ i:m, (matrix.row
      A i *ₘ x) () () ≥ b i () :=
 
 propext $ iff.intro
