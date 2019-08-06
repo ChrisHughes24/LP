@@ -101,4 +101,7 @@ by rw [← to_matrix_trans, single_trans_single_of_ne hb, to_matrix_bot]
   (single a c).to_matrix ⬝ M :=
 by rw [← matrix.mul_assoc, single_mul_single]
 
+@[simp] lemma single_val [has_zero α] [has_one α] (a : m) (b : n) :
+  (single a b).to_matrix a b = 1 := if_pos (if_pos rfl)
+
 end pequiv

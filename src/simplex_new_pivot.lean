@@ -5,74 +5,12 @@ open matrix fintype finset function
 
 variables {m n : ℕ}
 
+local infix ` ⬝ `:70 := matrix.mul
+local postfix `ᵀ` : 1500 := matrix.transpose
 local notation `rvec`:2000 n := matrix (fin 1) (fin n) ℚ
 local notation `cvec`:2000 m := matrix (fin m) (fin 1) ℚ
 
-def list.to_matrix (m :ℕ) (n : ℕ) (l : list (list ℚ)) : matrix (fin m) (fin n) ℚ :=
-λ i j, (l.nth_le i sorry).nth_le j sorry
-
-local attribute [instance] matrix.ordered_comm_group matrix.decidable_le
-open pequiv
-
-lemma cvec_one_lt_iff {a b : cvec 1} : a < b ↔ a 0 0 < b 0 0 :=
-begin
-  simp only [lt_iff_le_not_le],
-  show (∀ i j, a i j ≤ b i j) ∧ (¬ ∀ i j, b i j ≤ a i j) ↔ _,
-  simp [unique.forall_iff], refl,
-end
-
-instance : discrete_linear_ordered_field (cvec 1) :=
-{ mul_nonneg := λ a b ha0 hb0 i j, by simp [matrix.mul];
-    exact mul_nonneg (ha0 _ _) (hb0 _ _),
-  mul_pos := λ a b ha0 hb0,
-    begin
-      rw [cvec_one_lt_iff] at *,
-      simp [matrix.mul],
-      exact mul_pos ha0 hb0
-    end,
-  le_total := λ a b, (le_total (a 0 0) (b 0 0)).elim
-    (λ hab, or.inl $ λ i j, by fin_cases i; fin_cases j; exact hab)
-    (λ hba, or.inr $ λ i j, by fin_cases i; fin_cases j; exact hba),
-  zero_lt_one := dec_trivial,
-  decidable_le := matrix.decidable_le,
-  ..matrix.discrete_field,
-  ..matrix.ordered_comm_group }
-
-instance : decidable_linear_order (cvec 1) :=
-{ ..matrix.discrete_linear_ordered_field }
-
-local infix ` ⬝ `:70 := matrix.mul
-local postfix `ᵀ` : 1500 := transpose
-
-lemma cvec_le_iff (a b : cvec n) : a ≤ b ↔
-  (∀ i : fin n, (single (0 : fin 1) i).to_matrix ⬝ a ≤ (single 0 i).to_matrix ⬝ b) :=
-show (∀ i j, a i j ≤ b i j) ↔
-  (∀ i j k, ((single (0 : fin 1) i).to_matrix ⬝ a) j k ≤ ((single 0 i).to_matrix ⬝ b) j k),
-begin
-  simp only [mul_matrix_apply],
-  split,
-  { intros h i j k,
-    fin_cases j, fin_cases k,
-    exact h _ _ },
-  { intros h i j,
-    fin_cases j,
-    exact h i 0 0 }
-end
-
-lemma rvec_le_iff (a b : rvec n) : a ≤ b ↔
-  (∀ j : fin n, a ⬝ (single j (0 : fin 1)).to_matrix ≤ b ⬝ (single j 0).to_matrix) :=
-show (∀ i k, a i k ≤ b i k) ↔
-  (∀ j i k, (a ⬝ (single j (0 : fin 1)).to_matrix) i k ≤ (b ⬝ (single j 0).to_matrix) i k),
-begin
-  simp only [matrix_mul_apply],
-  split,
-  { intros h i j k,
-    fin_cases j, fin_cases k,
-    exact h _ _ },
-  { intros h i j,
-    fin_cases i,
-    exact h _ 0 0 }
-end
+local attribute [instance] matrix.partial_order
 
 def rvec.to_list {n : ℕ} (x : rvec n) : list ℚ :=
 (vector.of_fn (x 0)).1
@@ -81,6 +19,13 @@ instance has_repr_fin_fun {n : ℕ} {α : Type*} [has_repr α] : has_repr (fin n
 ⟨λ f, repr (vector.of_fn f).to_list⟩
 
 instance {m n} : has_repr (matrix (fin m) (fin n) ℚ) := has_repr_fin_fun
+open pequiv
+
+def list.to_matrix (m :ℕ) (n : ℕ) (l : list (list ℚ)) : matrix (fin m) (fin n) ℚ :=
+λ i j, (l.nth_le i sorry).nth_le j sorry
+
+local attribute [instance] matrix.ordered_comm_group matrix.decidable_le
+open pequiv
 
 namespace simplex
 
@@ -713,6 +658,8 @@ def is_optimal_basis (B : prebasis m n) (A : matrix (fin m) (fin n) ℚ)
 (A ⬝ B.basis.to_matrixᵀ).has_left_inverse ∧
   is_optimal A b c (B.basis.to_matrixᵀ ⬝ inverse (A ⬝ B.basis.to_matrixᵀ) ⬝ b)
 
+set_option class.instance_max_depth 100
+
 lemma is_unbounded_of_pivot_element_nonpos {B : prebasis m n}
   {A_bar : matrix (fin m) (fin n) ℚ} (b_bar : cvec m) (c : rvec n)
   {s : fin (n - m)} (hA_bar : A_bar ⬝ B.basis.to_matrixᵀ = 1)
@@ -740,7 +687,7 @@ begin
       rw [← (reduced_cost _ _ _).mul_assoc],
       dsimp only [a],
       rw [← matrix.mul_assoc (reduced_cost _ _ _ ⬝ _ ), ← mul_eq_mul,
-        ← mul_eq_mul, mul_inv_cancel (ne_of_lt hs).symm, one_mul],
+        ← mul_eq_mul, mul_inv_cancel (ne_of_lt hs).symm],
       simp [le_refl] } }
 end
 
@@ -778,8 +725,6 @@ lemma choose_pivot_column_spec (B : prebasis m n) (A_bar : matrix (fin m) (fin n
   (h0b : 0 ≤ b_bar) (h : choose_pivot_column B A_bar c = some s) :
   0 < reduced_cost B A_bar c ⬝ (single s (0 : fin 1)).to_matrix :=
 fin.find_spec _ h
-
-set_option class.instance_max_depth 60
 
 def choose_pivot_row (B : prebasis m n) (A_bar : matrix (fin m) (fin n) ℚ) (b_bar : cvec m)
   (c : rvec n) (s : fin (n - m)) : option (fin m) :=
