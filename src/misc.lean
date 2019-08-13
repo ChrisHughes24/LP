@@ -1,4 +1,4 @@
-import data.matrix tactic.fin_cases .matrix_pequiv
+import data.matrix.pequiv tactic.fin_cases
 import linear_algebra.finite_dimensional
 
 local infix ` ⬝ `:70 := matrix.mul
@@ -435,11 +435,11 @@ local attribute [instance] matrix.partial_order matrix.ordered_comm_group
 
 lemma matrix.mul_nonneg [ordered_semiring α] {M : matrix m n α}
   {N : matrix n o α} (hM : 0 ≤ M) (hN : 0 ≤ N) : 0 ≤ M ⬝ N :=
-λ i j, by classical; exact finset.zero_le_sum' (λ _ _, mul_nonneg (hM _ _) (hN _ _))
+λ i j, by classical; exact finset.sum_nonneg (λ _ _, mul_nonneg (hM _ _) (hN _ _))
 
 lemma matrix.mul_nonpos_of_nonpos_of_nonneg [ordered_semiring α] {M : matrix m n α}
   {N : matrix n o α} (hM : M ≤ 0) (hN : 0 ≤ N) : M ⬝ N ≤ 0 :=
-λ i j, by classical; exact finset.sum_le_zero'
+λ i j, by classical; exact finset.sum_nonpos
   (λ _ _, mul_nonpos_of_nonpos_of_nonneg (hM _ _) (hN _ _))
 
 lemma pequiv_nonneg [decidable_eq m] [decidable_eq n] [linear_ordered_semiring α] (f : pequiv m n) :
