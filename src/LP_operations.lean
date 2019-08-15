@@ -1,15 +1,24 @@
-import data.matrix.pequiv data.rat.basic tactic.fin_cases .misc .argmin .partition
+import data.matrix.pequiv data.rat.basic tactic.fin_cases .argmin .partition
 
 open matrix fintype finset function pequiv
-
-variables {m n : ℕ}
 
 local notation `rvec`:2000 n := matrix (fin 1) (fin n) ℚ
 local notation `cvec`:2000 m := matrix (fin m) (fin 1) ℚ
 local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := transpose
-local attribute [instance] matrix.partial_order
-local attribute [instance, priority 0] algebra.has_scalar
+
+section
+universes u v
+variables {l m n o : Type u} [fintype l] [fintype m] [fintype n] [fintype o] {R : Type v}
+
+/- Belongs in mathlib -/
+lemma mul_right_eq_of_mul_eq [semiring R] {M : matrix l m R} {N : matrix m n R} {O : matrix l n R}
+  {P : matrix n o R} (h : M ⬝ N = O) : M ⬝ (N ⬝ P) = O ⬝ P :=
+by rw [← matrix.mul_assoc, h]
+
+end
+
+variables {m n : ℕ}
 
 /-- The tableau consists of a matrix and a constant `offset` column.
   `to_partition` stores the indices of the current row and column variables.
@@ -25,8 +34,6 @@ open partition
 
 section predicates
 variable (T : tableau m n)
-
-abbreviation rowi := T.to_partition.rowg
 
 /-- The affine subspace represented by the tableau ignoring nonnegativity restrictiions -/
 def flat : set (cvec (m + n)) := { x | T.to_partition.rowp.to_matrix ⬝ x =
@@ -52,9 +59,9 @@ def equal_in_flat (i j : fin (m + n)) : Prop :=
 ∀ (x : cvec (m + n)), x ∈ flat T → x i 0 = x j 0
 
 /-- Returns an element of the `flat` after assigning values to the column variables -/
-def of_col (T : tableau m n) (c : cvec n) : cvec (m + n) :=
-T.to_partition.colp.to_matrixᵀ ⬝ c + T.to_partition.rowp.to_matrixᵀ ⬝
-  (T.to_matrix ⬝ c + T.offset)
+def of_col (T : tableau m n) (x : cvec n) : cvec (m + n) :=
+T.to_partition.colp.to_matrixᵀ ⬝ x + T.to_partition.rowp.to_matrixᵀ ⬝
+  (T.to_matrix ⬝ x + T.offset)
 
 /-- A `tableau` is feasible if its `offset` column is nonnegative in restricted rows -/
 def feasible : Prop :=
@@ -529,33 +536,24 @@ iterate_induction_on (λ T', T'.sol_set = T.sol_set) p T rfl $
 
 namespace simplex
 
-def find_pivot_column (T : tableau m n) (i : fin m) : option (fin n) :=
-option.cases_on (fin.find (λ s : fin n, T.to_matrix i s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted))
-  (fin.find (λ s : fin n, 0 < T.to_matrix i s))
+def find_pivot_column (T : tableau m n) (obj : fin m) : option (fin n) :=
+option.cases_on (fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted))
+  (fin.find (λ c : fin n, 0 < T.to_matrix obj c))
   some
 
-def find_pivot_row (T : tableau m n) (i : fin m) (s : fin n) : option (fin m) :=
-let l := (list.fin_range m).filter (λ r : fin m, i ≠ r ∧ T.to_partition.rowg r ∈ T.restricted
-  ∧ T.to_matrix i s / T.to_matrix r s < 0) in
-l.argmin (λ r', abs (T.offset r' 0 / T.to_matrix r' s))
+def find_pivot_row (T : tableau m n) (obj: fin m) (c : fin n) : option (fin m) :=
+let l := (list.fin_range m).filter (λ r : fin m, obj ≠ r ∧ T.to_partition.rowg r ∈ T.restricted
+  ∧ T.to_matrix obj c / T.to_matrix r c < 0) in
+l.argmin (λ r', abs (T.offset r' 0 / T.to_matrix r' c))
 
-/-- Belongs elsewhere -/
-lemma mem_find_iff {p : fin n → Prop} [decidable_pred p] {i : fin n} :
-  i ∈ fin.find p ↔ p i ∧ ∀ j, p j → i ≤ j :=
-sorry
-
-/-- Belongs elsewhere -/
-lemma find_eq_some_iff {p : fin n → Prop} {h : decidable_pred p} {i : fin n} :
-  fin.find p = some i ↔ p i ∧ ∀ j, p j → i ≤ j := sorry
-
-lemma find_pivot_column_spec {T : tableau m n} {i : fin m} {s : fin n} :
-  s ∈ find_pivot_column T i → (T.to_matrix i s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted)
-  ∨ (0 < T.to_matrix i s ∧ T.to_partition.colg s ∈ T.restricted) :=
+lemma find_pivot_column_spec {T : tableau m n} {obj : fin m} {s : fin n} :
+  s ∈ find_pivot_column T obj → (T.to_matrix obj s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted)
+  ∨ (0 < T.to_matrix obj s ∧ T.to_partition.colg s ∈ T.restricted) :=
 begin
   simp [find_pivot_column],
-  cases h : fin.find (λ s : fin n, T.to_matrix i s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted),
-  { finish [h, find_eq_some_iff, fin.find_eq_none_iff, lt_irrefl (0 : ℚ)] },
-  { finish [find_eq_some_iff] }
+  cases h : fin.find (λ s : fin n, T.to_matrix obj s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted),
+  { finish [h, fin.find_eq_some_iff, fin.find_eq_none_iff, lt_irrefl (0 : ℚ)] },
+  { finish [fin.find_eq_some_iff] }
 end
 
 -- lemma find_pivot_column_eq_none_aux {T : tableau m n} {i : fin m} {s : fin n} :
@@ -569,53 +567,54 @@ end
 
 -- end
 
-lemma find_pivot_column_eq_none {T : tableau m n} {i : fin m} (hT : T.feasible)
-  (h : find_pivot_column T i = none) : T.is_maximised (T.of_col 0) (T.to_partition.rowg i) :=
+lemma find_pivot_column_eq_none {T : tableau m n} {obj : fin m} (hT : T.feasible)
+  (h : find_pivot_column T obj = none) : T.is_maximised (T.of_col 0) (T.to_partition.rowg obj) :=
 is_maximised_of_col_zero hT
 begin
   revert h,
   simp [find_pivot_column],
-  cases h : fin.find (λ s : fin n, T.to_matrix i s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted),
+  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted),
   { finish [fin.find_eq_none_iff] },
   { simp [h] }
 end
 
-lemma find_pivot_row_spec {T : tableau m n} {i r : fin m} {s : fin n} :
-  r ∈ find_pivot_row T i s →
-  i ≠ r ∧ T.to_partition.rowg r ∈ T.restricted ∧
-  T.to_matrix i s / T.to_matrix r s < 0 ∧
-  (∀ r' : fin m, i ≠ r' → T.to_partition.rowg r' ∈ T.restricted →
-    T.to_matrix i s / T.to_matrix r' s < 0 →
-  abs (T.offset r 0 / T.to_matrix r s) ≤ abs (T.offset r' 0 / T.to_matrix r' s)) :=
+lemma find_pivot_row_spec {T : tableau m n} {obj r : fin m} {c : fin n} :
+  r ∈ find_pivot_row T obj c →
+  obj ≠ r ∧ T.to_partition.rowg r ∈ T.restricted ∧
+  T.to_matrix obj c / T.to_matrix r c < 0 ∧
+  (∀ r' : fin m, obj ≠ r' → T.to_partition.rowg r' ∈ T.restricted →
+    T.to_matrix obj c / T.to_matrix r' c < 0 →
+  abs (T.offset r 0 / T.to_matrix r c) ≤ abs (T.offset r' 0 / T.to_matrix r' c)) :=
 by simp only [list.mem_argmin_iff, list.mem_filter, find_pivot_row,
     list.mem_fin_range, true_and, and_imp]; tauto
 
-lemma find_pivot_row_eq_none_aux {T : tableau m n} {i : fin m} {s : fin n}
-  (hrow : find_pivot_row T i s = none) (hs : s ∈ find_pivot_column T i) :
-  ∀ r, i ≠ r → T.to_partition.rowg r ∈ T.restricted → 0 ≤ T.to_matrix i s / T.to_matrix r s :=
+lemma find_pivot_row_eq_none_aux {T : tableau m n} {obj : fin m} {c : fin n}
+  (hrow : find_pivot_row T obj c = none) (hs : c ∈ find_pivot_column T obj) :
+  ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted → 0 ≤ T.to_matrix obj c / T.to_matrix r c :=
 by simpa [find_pivot_row, list.filter_eq_nil] using hrow
 
-lemma find_pivot_row_eq_none {T : tableau m n} {i : fin m} {s : fin n} (hT : T.feasible)
-  (hrow : find_pivot_row T i s = none) (hs : s ∈ find_pivot_column T i) :
-  T.is_unbounded_above (T.to_partition.rowg i) :=
-have hrow : ∀ r, i ≠ r → T.to_partition.rowg r ∈ T.restricted → 0 ≤ T.to_matrix i s / T.to_matrix r s,
+lemma find_pivot_row_eq_none {T : tableau m n} {obj : fin m} {c : fin n} (hT : T.feasible)
+  (hrow : find_pivot_row T obj c = none) (hs : c ∈ find_pivot_column T obj) :
+  T.is_unbounded_above (T.to_partition.rowg obj) :=
+have hrow : ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted →
+    0 ≤ T.to_matrix obj c / T.to_matrix r c,
   from find_pivot_row_eq_none_aux hrow hs,
-have hs : (T.to_matrix i s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted)
-  ∨ (0 < T.to_matrix i s ∧ T.to_partition.colg s ∈ T.restricted),
+have hc : (T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
+    ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted),
   from find_pivot_column_spec hs,
-have hTis : T.to_matrix i s ≠ 0, from λ h, by simpa [h, lt_irrefl] using hs,
-(lt_or_gt_of_ne hTis).elim
-  (λ hTis : T.to_matrix i s < 0, is_unbounded_above_rowg_of_nonpos hT s
-    (hs.elim and.right (λ h, (not_lt_of_gt hTis h.1).elim))
-    (λ i' hi', classical.by_cases
-      (λ hii' : i = i', le_of_lt (hii' ▸ hTis))
-      (λ hii' : i ≠ i', inv_nonpos.1 $ nonpos_of_mul_nonneg_right (hrow _ hii' hi') hTis))
-    hTis)
-  (λ hTis : 0 < T.to_matrix i s, is_unbounded_above_rowg_of_nonneg hT s
-    (λ i' hi', classical.by_cases
-      (λ hii' : i = i', le_of_lt (hii' ▸ hTis))
-      (λ hii' : i ≠ i', inv_nonneg.1 $ nonneg_of_mul_nonneg_left (hrow _ hii' hi') hTis))
-    hTis)
+have hToc : T.to_matrix obj c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hc,
+(lt_or_gt_of_ne hToc).elim
+  (λ hToc : T.to_matrix obj c < 0, is_unbounded_above_rowg_of_nonpos hT c
+    (hc.elim and.right (λ h, (not_lt_of_gt hToc h.1).elim))
+    (λ i hi, classical.by_cases
+      (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
+      (λ hoi : obj ≠ i, inv_nonpos.1 $ nonpos_of_mul_nonneg_right (hrow _ hoi hi) hToc))
+    hToc)
+  (λ hToc : 0 < T.to_matrix obj c, is_unbounded_above_rowg_of_nonneg hT c
+    (λ i hi, classical.by_cases
+      (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
+      (λ hoi : obj ≠ i, inv_nonneg.1 $ nonneg_of_mul_nonneg_left (hrow _ hoi hi) hToc))
+    hToc)
 
 /-- This `pivot_rule` maximises the sample value of `i` -/
 def simplex_pivot_rule (i : fin m) : pivot_rule m n :=
@@ -642,7 +641,7 @@ namespace simplex
 /-- The simplex algorithm does not pivot the variable it is trying to optimise -/
 lemma simplex_pivot_indices_ne {T : tableau m n} {i : fin m} {r s} :
   (r, s) ∈ (simplex_pivot_rule i).pivot_indices T → i ≠ r :=
-by simp only [simplex_pivot_rule, find_pivot_row, find_eq_some_iff, option.mem_def, list.mem_filter,
+by simp only [simplex_pivot_rule, find_pivot_row, fin.find_eq_some_iff, option.mem_def, list.mem_filter,
   option.bind_eq_some, prod.mk.inj_iff, exists_imp_distrib, and_imp, list.argmin_eq_some_iff,
   @forall_swap _ (_ = r), @forall_swap (_ ≠ r), imp_self, forall_true_iff] {contextual := tt}
 
@@ -653,10 +652,6 @@ iterate_induction_on (λ T', T'.to_partition.rowg i = T.to_partition.rowg i) _ _
   assume T' r s (hT' : T'.to_partition.rowg i = T.to_partition.rowg i) hrs,
     by rw [to_partition_pivot, rowg_swap_of_ne _ (simplex_pivot_indices_ne hrs), hT']
 
-theorem bind_eq_none' {α β : Type*} {o : option α} {f : α → option β} :
-  o >>= f = none ↔ (∀ b a, a ∈ o → b ∉ f a) :=
-option.bind_eq_none
-
 lemma simplex_pivot_rule_eq_none {T : tableau m n} {i : fin m} (hT : T.feasible)
   (h : (simplex_pivot_rule i).pivot_indices T = none) :
   is_maximised T (T.of_col 0) (T.to_partition.rowg i) ∨
@@ -665,7 +660,7 @@ begin
   cases hs : find_pivot_column T i with s,
   { exact or.inl (find_pivot_column_eq_none hT hs) },
   { dsimp [simplex_pivot_rule] at h,
-    rw [hs, option.some_bind, bind_eq_none'] at h,
+    rw [hs, option.some_bind, option.bind_eq_none] at h,
     have : find_pivot_row T i s = none,
     { exact option.eq_none_iff_forall_not_mem.2 (λ r, by simpa using h (r, s) r) },
     exact or.inr (find_pivot_row_eq_none hT this hs) }
@@ -759,17 +754,15 @@ instance {m n} : has_repr (matrix (fin m) (fin n) ℚ) := has_repr_fin_fun
 --   to_partition := default _,
 --   restricted := univ }
 
-/-- Takes a long time on this example -/
-def T : tableau 20 7 :=
-{ to_matrix := list.to_matrix 20 7
-  [[66936 , -86739 , -127253 , 109971 , 107521 , -75883 , -7806],[41425 , -48734 , -118695 , -117250 , 85865 , -135995 , -20127],[-84630 , -134084 , -56601 , 11315 , 44203 , -110666 , 59955],[126807 , 103566 , -26027 , 91856 , 65208 , -61603 , 77039],[97698 , -69297 , -74944 , -65503 , 30390 , 88977 , 18950],[-2974 , -4253 , 74595 , -93148 , -33997 , 79545 , 9612],[118718 , 15760 , -54446 , 61921 , 87477 , -26800 , 3196],[-105941 , 31785 , -126601 , -49302 , -119796 , 101999 , 40688],[-132477 , 30593 , -93376 , 88437 , -46159 , -145283 , -6812],[81681 , -46389 , 11505 , 106846 , 141938 , 65574 , 120459],[-87352 , -17470 , -55685 , 103269 , 24211 , -128765 , 115308],[-30856 , 97040 , -108908 , -10102 , -7116 , -20331 , -54441],[-38914 , -118878 , -140982 , -145270 , -37438 , -142738 , 92027],[103975 , 100096 , -46322 , -5789 , 55040 , 17044 , 95243],[-31968 , -128908 , 90790 , 22690 , -108755 , -16227 , 134028],[109232 , 132296 , -3463 , 87319 , -31887 , 93336 , -22901],[121103 , 129374 , -48880 , -142151 , -65764 , 108725 , 78628],[21259 , 33547 , -95208 , -140857 , 133895 , 53844 , 76271],[11897 , 37281 , -24593 , -7054 , 52038 , 117349 , -25266],[12768 , 95427 , -2914 , -13272 , -57087 , -142411 , -136795]],
-  offset := list.to_matrix 20 1 [[85612],[8154],[-31061],[94904],[-36658],[34776],[-9298],[85857],[136400],[131547],[64042],[-136527],[-16216],[108134],[30424],[-142642],[39431],[-67942],[-25233],[19458]],
+def T : tableau 25 10 :=
+{ to_matrix := list.to_matrix 25 10
+  [[1,0,1,-1,-1,-1,1,-1,1,1],[0,1,-1,1,1,1,-1,1,-1,1],[0,1,-1,1,-1,0,-1,-1,-1,0],[1,1,-1,-1,-1,-1,-1,1,-1,-1],[0,-1,1,1,0,-1,1,-1,1,-1],[0,1,1,0,1,1,0,1,0,1],[0,1,0,1,0,1,1,0,-1,-1],[0,0,-1,1,1,0,0,0,1,-1],[0,0,1,0,1,-1,-1,0,1,1],[0,-1,0,0,1,-1,-1,1,0,0],[0,-1,1,0,0,1,0,-1,1,0],[1,1,1,-1,1,-1,-1,0,-1,1],[1,1,-1,-1,-1,1,-1,1,-1,-1],[-1,-1,-1,1,1,1,1,1,-1,-1],[0,1,0,0,1,-1,0,0,-1,1],[-1,-1,-1,-1,1,1,1,0,-1,1],[0,0,-1,-1,0,1,1,-1,1,1],[1,0,1,0,0,0,1,0,0,1],[-1,0,-1,0,1,1,-1,1,1,-1],[0,1,-1,1,-1,0,0,-1,-1,-1],[1,1,0,1,1,0,1,1,-1,1],[0,0,0,0,0,1,-1,1,0,-1],[1,1,0,0,-1,1,0,0,1,0],[0,0,-1,1,-1,1,-1,1,-1,-1],[0,0,0,0,1,-1,1,1,-1,-1]],
+  offset := λ _ _, 1,
   to_partition := default _,
-  restricted := univ \ {20,21,22,23,24,25,26} }
+  restricted := univ }
 
-#eval let s := T.simplex 0 in
-  (s.offset, (list.fin_range 20).map
-    (λ i, (s.to_partition.rowg i ∈ s.restricted : bool)), s.to_matrix,
-      find_pivot_column s 0, s.to_partition.rowg)
+#print tc.rec
+
+#eval let s := T.simplex 0 in (s.to_matrix, s.offset)
 
 end test

@@ -105,58 +105,6 @@ begin
   exact (this j k).resolve_left (not_not.2 hi) hk
 end
 
-lemma colp_ne_none_of_rowp_eq_none (B : partition m n) (j : fin (m + n))
-  (hb : B.rowp.symm j = none) (hnb : B.colp.symm j = none) : false :=
-have hs : card (univ.image B.rowp) = m,
-  by rw [card_image_of_injective _ (B.injective_rowp), card_univ, card_fin],
-have ht : card (univ.image B.colp) = n,
-  by rw [card_image_of_injective _ (B.injective_colp), card_univ, card_fin],
-have hst : disjoint (univ.image B.rowp) (univ.image B.colp),
-  from finset.disjoint_left.2 begin
-    simp only [mem_image, exists_imp_distrib, not_exists],
-    assume j i _ hrowp k _ hcolp,
-    cases option.is_some_iff_exists.1 (is_some_rowp B i) with x hi,
-    cases option.is_some_iff_exists.1 (is_some_colp B k) with y hk,
-    have hxy : x = y,
-    { rw [← option.some_inj, ← hk, ← hi, hrowp, hcolp] }, subst hxy,
-    rw [← eq_some_iff] at hi hk,
-    refine not_is_some_colp_of_is_some_rowp B x _ _;
-    simp [hi, hk]
-  end,
-have (univ.image B.rowp) ∪ (univ.image B.colp) = univ.image (@some (fin (m + n))),
-  from eq_of_subset_of_card_le
-    begin
-      assume i h,
-      simp only [finset.mem_image, finset.mem_union] at h,
-      rcases h with ⟨j, _, hj⟩ | ⟨k, _, hk⟩,
-      { simpa [hj.symm, option.is_some_iff_exists, eq_comm] using is_some_rowp B j },
-      { simpa [hk.symm, option.is_some_iff_exists, eq_comm] using is_some_colp B k }
-    end
-    (begin
-      rw [card_image_of_injective, card_univ, card_fin, card_disjoint_union hst, hs, ht],
-      exact λ _ _, option.some_inj.1,
-    end),
-begin
-  simp only [option.eq_none_iff_forall_not_mem, mem_iff_mem B.rowp,
-    mem_iff_mem B.colp] at hb hnb,
-  have := (finset.ext.1 this (some j)).2 (mem_image_of_mem _ (mem_univ _)),
-  simp only [hb, hnb, mem_image, finset.mem_union, option.mem_def.symm] at this, tauto
-end
-
-lemma is_some_rowp_iff (B : partition m n) (j : fin (m + n)) :
-  (B.rowp.symm j).is_some ↔ ¬(B.colp.symm j).is_some :=
-⟨not_is_some_colp_of_is_some_rowp B j,
-  by erw [option.not_is_some_iff_eq_none, ← option.ne_none_iff_is_some, forall_swap];
-    exact colp_ne_none_of_rowp_eq_none B j⟩
-
-@[simp] lemma colp_rowg_eq_none (B : partition m n) (r : fin m) :
-  B.colp.symm (B.rowg r) = none :=
-option.not_is_some_iff_eq_none.1 ((B.is_some_rowp_iff _).1 (is_some_symm_get _ _))
-
-@[simp] lemma rowp_colg_eq_none (B : partition m n) (s : fin n) :
-  B.rowp.symm (B.colg s) = none :=
-option.not_is_some_iff_eq_none.1 (mt (B.is_some_rowp_iff _).1 $ not_not.2 (is_some_symm_get _ _))
-
 @[simp] lemma rowg_mem (B : partition m n) (r : fin m) : (B.rowg r) ∈ B.rowp r :=
 option.get_mem _
 
@@ -174,6 +122,43 @@ B.rowp.mem_iff_mem.2 (rowg_mem _ _)
 
 @[simp] lemma colp_colg (B : partition m n) (s : fin n) : B.colp.symm (B.colg s) = some s :=
 B.colp.mem_iff_mem.2 (colg_mem _ _)
+
+lemma colp_ne_none_of_rowp_eq_none (B : partition m n) (v : fin (m + n))
+  (hb : B.rowp.symm v = none) (hnb : B.colp.symm v = none) : false :=
+have hs : card (univ.image B.rowg) = m,
+  by rw [card_image_of_injective _ (B.injective_rowg), card_univ, card_fin],
+have ht : card (univ.image B.colg) = n,
+  by rw [card_image_of_injective _ (B.injective_colg), card_univ, card_fin],
+have hst : disjoint (univ.image B.rowg) (univ.image B.colg),
+  from finset.disjoint_left.2 begin
+    simp only [mem_image, exists_imp_distrib, not_exists],
+    assume v i _ hi j _ hj,
+    subst hi,
+    exact not_is_some_colp_of_is_some_rowp B (B.rowg i)
+      (option.is_some_iff_exists.2 ⟨i, by simp⟩)
+      (hj ▸ option.is_some_iff_exists.2 ⟨j, by simp⟩),
+  end,
+have (univ.image B.rowg) ∪ (univ.image B.colg) = univ,
+  from eq_of_subset_of_card_le (λ _ _, mem_univ _)
+    (by rw [card_disjoint_union hst, hs, ht, card_univ, card_fin]),
+begin
+  cases mem_union.1 (eq_univ_iff_forall.1 this v);
+  rcases mem_image.1 h with ⟨_, _, h⟩; subst h; simp * at *
+end
+
+lemma is_some_rowp_iff (B : partition m n) (j : fin (m + n)) :
+  (B.rowp.symm j).is_some ↔ ¬(B.colp.symm j).is_some :=
+⟨not_is_some_colp_of_is_some_rowp B j,
+  by erw [option.not_is_some_iff_eq_none, ← option.ne_none_iff_is_some, forall_swap];
+    exact colp_ne_none_of_rowp_eq_none B j⟩
+
+@[simp] lemma colp_rowg_eq_none (B : partition m n) (r : fin m) :
+  B.colp.symm (B.rowg r) = none :=
+option.not_is_some_iff_eq_none.1 ((B.is_some_rowp_iff _).1 (is_some_symm_get _ _))
+
+@[simp] lemma rowp_colg_eq_none (B : partition m n) (s : fin n) :
+  B.rowp.symm (B.colg s) = none :=
+option.not_is_some_iff_eq_none.1 (mt (B.is_some_rowp_iff _).1 $ not_not.2 (is_some_symm_get _ _))
 
 lemma eq_rowg_or_colg (B : partition m n) (i : fin (m + n)) :
   (∃ j, i = B.rowg j) ∨ (∃ j, i = B.colg j) :=
