@@ -396,23 +396,24 @@ set.subset.antisymm
   (T.pivot r s).sol_set = T.sol_set :=
 by rw [sol_set, flat_pivot hrs]; refl
 
-lemma feasible_pivot (hTf : T.feasible) {r : fin m} {c : fin n}
-  (hc : T.offset r 0 / T.to_matrix r c ≤ 0)
-  (h : ∀ i : fin m, i ≠ r → T.to_partition.rowg i ∈ T.restricted →
-    0 ≤ T.offset i 0 - T.to_matrix i c * T.offset r 0 / T.to_matrix r c) :
-  (T.pivot r c).feasible :=
-assume i hi,
-if hir : i = r
-  then begin
-    subst hir,
-    rw [offset_pivot_row],
-    simpa [neg_div] using hc
-  end
-  else begin
-    rw [to_partition_pivot, rowg_swap_of_ne _ hir, restricted_pivot] at hi,
-    rw [offset_pivot_of_ne _ hir],
-    simpa [offset_pivot_of_ne _ hir] using h _ hir hi
-  end
+-- lemma feasible_pivot (hTf : T.feasible) {r : fin m} {s : fin n}
+--   (hs : T.to_partition.colg s ∈ T.restricted → T.offset r 0 / T.to_matrix r s ≤ 0)
+--   (h : ∀ i : fin m, i ≠ r → T.to_partition.rowg i ∈ T.restricted →
+--     0 ≤ T.offset i 0 - T.to_matrix i s * T.offset r 0 / T.to_matrix r s) :
+--   (T.pivot r s).feasible :=
+-- assume i hi,
+-- if hir : i = r
+--   then begin
+--     subst hir,
+--     rw [offset_pivot_row],
+--     simp at *,
+--   end
+--   else begin
+--     rw [to_partition_pivot, rowg_swap_of_ne _ hir, restricted_pivot] at hi,
+--     rw [offset_pivot_of_ne _ hir, sub_nonneg, mul_div_assoc],
+--     sorry
+
+--   end
 
 /-- Two row variables are `equal_in_flat` iff the corresponding rows of the tableau are equal -/
 lemma equal_in_flat_row_row {i i' : fin m} :
@@ -452,79 +453,153 @@ by rintros ⟨h₁, h₂, h₃⟩ x hx;
 
 end predicate_lemmas
 
-/-- definition used to define well-foundedness of a pivot rule -/
-inductive rel_gen {α : Type*} (f : α → option α) : α → α → Prop
-| of_mem : ∀ {x y}, x ∈ f y → rel_gen x y
-| trans : ∀ {x y z}, rel_gen x y → rel_gen y z → rel_gen x z
+/-- Conditions for unboundedness based on reading the tableau. The conditions are equivalent to the
+  simplex pivot rule failing to find a pivot row. -/
+lemma unbounded_of_tableau {T : tableau m n} {obj : fin m} {c : fin n} (hT : T.feasible)
+  (hrow : ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted →
+    0 ≤ T.to_matrix obj c / T.to_matrix r c)
+  (hc : (T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
+    ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted)) :
+  T.is_unbounded_above (T.to_partition.rowg obj) :=
+have hToc : T.to_matrix obj c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hc,
+(lt_or_gt_of_ne hToc).elim
+  (λ hToc : T.to_matrix obj c < 0, is_unbounded_above_rowg_of_nonpos hT c
+    (hc.elim and.right (λ h, (not_lt_of_gt hToc h.1).elim))
+    (λ i hi, classical.by_cases
+      (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
+      (λ hoi : obj ≠ i, inv_nonpos.1 $ nonpos_of_mul_nonneg_right (hrow _ hoi hi) hToc))
+    hToc)
+  (λ hToc : 0 < T.to_matrix obj c, is_unbounded_above_rowg_of_nonneg hT c
+    (λ i hi, classical.by_cases
+      (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
+      (λ hoi : obj ≠ i, inv_nonneg.1 $ nonneg_of_mul_nonneg_left (hrow _ hoi hi) hToc))
+    hToc)
 
-/-- A pivot rule is a function that selects a nonzero pivot, given a tableau, such that
-  iterating using this pivot rule terminates. -/
-structure pivot_rule (m n : ℕ) : Type :=
-(pivot_indices : tableau m n → option (fin m × fin n))
-(well_founded : well_founded (rel_gen (λ T, pivot_indices T >>= λ i, T.pivot i.1 i.2)))
-(ne_zero : ∀ {T r s}, (r, s) ∈ pivot_indices T → T.to_matrix r s ≠ 0)
-
-def pivot_rule.rel (p : pivot_rule m n) : tableau m n → tableau m n → Prop :=
-rel_gen (λ T, p.pivot_indices T >>= λ i, T.pivot i.1 i.2)
-
-lemma pivot_rule.rel_wf (p : pivot_rule m n) : well_founded p.rel := p.well_founded
-
-def iterate (p : pivot_rule m n) : tableau m n → tableau m n
-| T :=
-have ∀ (r : fin m) (s : fin n), (r, s) ∈ p.pivot_indices T → p.rel (T.pivot r s) T,
-  from λ r s hrs, rel_gen.of_mem $ by rw option.mem_def.1 hrs; exact rfl,
-option.cases_on (p.pivot_indices T) (λ _, T)
-  (λ i this,
-    have wf : p.rel (T.pivot i.1 i.2) T, from this _ _ (by cases i; exact rfl),
-    iterate (T.pivot i.1 i.2))
-  this
-using_well_founded { rel_tac := λ _ _, `[exact ⟨_, p.rel_wf⟩],
-  dec_tac := tactic.assumption }
-
-lemma iterate_pivot {p : pivot_rule m n} {T : tableau m n} {r : fin m} {s : fin n}
-  (hrs : (r, s) ∈ p.pivot_indices T) : (T.pivot r s).iterate p = T.iterate p :=
-by conv_rhs {rw iterate}; simp [option.mem_def.1 hrs]
-
-@[simp] lemma pivot_indices_iterate (p : pivot_rule m n) : ∀ (T : tableau m n),
-  p.pivot_indices (T.iterate p) = none
-| T :=
-have ∀ r s, (r, s) ∈ p.pivot_indices T → p.rel (T.pivot r s) T,
-  from λ r s hrs, rel_gen.of_mem $ by rw option.mem_def.1 hrs; exact rfl,
+/-- Conditions for the tableau being feasible, that must be satisified by a simplex pivot rule -/
+lemma feasible_pivot {T : tableau m n} {obj : fin m} (hT : T.feasible) {r c}
+  (hres : rowg (T.to_partition) r ∈ T.restricted)
+  (hrneg : T.to_matrix obj c / T.to_matrix r c < 0)
+  (hrmin : ∀ (r' : fin m), obj ≠ r' → rowg (T.to_partition) r' ∈ T.restricted →
+          T.to_matrix obj c / T.to_matrix r' c < 0 →
+          abs (T.offset r 0 / T.to_matrix r c) ≤ abs (T.offset r' 0 / T.to_matrix r' c))
+  (hc : T.to_matrix obj c ≠ 0 ∧ colg (T.to_partition) c ∉ T.restricted ∨ 0 < T.to_matrix obj c) :
+  (T.pivot r c).feasible :=
 begin
-  rw iterate,
-  cases h : p.pivot_indices T with i,
-  { simp [h] },
-  { cases i with r s,
-    simp [h, pivot_indices_iterate (T.pivot r s)] }
+  assume i hi,
+  dsimp only [pivot],
+  by_cases hir : i = r,
+  { subst i,
+    rw [if_pos rfl, neg_mul_eq_neg_mul_symm, neg_nonneg],
+    exact mul_nonpos_of_nonneg_of_nonpos (hT _ hres)
+      (le_of_lt (neg_of_mul_neg_left hrneg (le_of_lt (by simp * at *)))) },
+  { rw if_neg hir,
+    rw [to_partition_pivot, rowg_swap_of_ne _ hir, restricted_pivot] at hi,
+    by_cases hobji : obj = i,
+    { subst i,
+      refine add_nonneg (hT _ hi) (neg_nonneg.2 _),
+      rw [mul_assoc, mul_left_comm],
+      exact mul_nonpos_of_nonneg_of_nonpos (hT _ hres) (le_of_lt hrneg) },
+    { by_cases hTir : 0 < T.to_matrix i c / T.to_matrix r c,
+      { have hTic0 : T.to_matrix i c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hTir,
+        have hTrc0 : T.to_matrix r c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hTir,
+        have hTobji : T.to_matrix obj c / T.to_matrix i c < 0,
+        { suffices : (T.to_matrix obj c / T.to_matrix r c) / (T.to_matrix i c / T.to_matrix r c) < 0,
+          { simp only [div_eq_mul_inv, mul_assoc, mul_inv', inv_inv',
+              mul_left_comm (T.to_matrix r c), mul_left_comm (T.to_matrix r c)⁻¹,
+              mul_comm (T.to_matrix r c), inv_mul_cancel hTrc0, mul_one] at this,
+            simpa [mul_comm, div_eq_mul_inv] },
+        { exact div_neg_of_neg_of_pos hrneg hTir } },
+        have := hrmin _ hobji hi hTobji,
+        rwa [abs_div, abs_div, abs_of_nonneg (hT _ hres), abs_of_nonneg (hT _ hi),
+          le_div_iff (abs_pos_iff.2 hTic0), div_eq_mul_inv, mul_right_comm, ← abs_inv, mul_assoc,
+          ← abs_mul, ← div_eq_mul_inv, abs_of_nonneg (le_of_lt hTir), ← sub_nonneg,
+          ← mul_div_assoc, div_eq_mul_inv, mul_comm (T.offset r 0)] at this },
+      { refine add_nonneg (hT _ hi) (neg_nonneg.2 _),
+        rw [mul_assoc, mul_left_comm],
+        exact mul_nonpos_of_nonneg_of_nonpos (hT _ hres) (le_of_not_gt hTir) } } }
 end
-using_well_founded { rel_tac := λ _ _, `[exact ⟨_, p.rel_wf⟩], dec_tac := `[tauto] }
 
-/- Is there some nice elaborator attribute for this, to avoid `P` having to be explicit? -/
-lemma iterate_induction_on (P : tableau m n → Prop) (p : pivot_rule m n) :
-  ∀ T : tableau m n, P T → (∀ T' r s, P T' → (r, s) ∈ p.pivot_indices T'
-    → P (T'.pivot r s)) → P (T.iterate p)
-| T := λ hT ih,
-have ∀ r s, (r, s) ∈ p.pivot_indices T → p.rel (T.pivot r s) T,
-  from λ r s hrs, rel_gen.of_mem $ by rw option.mem_def.1 hrs; exact rfl,
-begin
-  rw iterate,
-  cases h : p.pivot_indices T with i,
-  { simp [hT, h] },
-  { cases i with r s,
-    simp [h, iterate_induction_on _ (ih _ _ _ hT h) ih] }
-end
-using_well_founded { rel_tac := λ _ _, `[exact ⟨_, p.rel_wf⟩], dec_tac := `[tauto] }
+-- /-- Conditions for maximality of the sample solution based on reading the tableau. The conditions
+--   are equivalent to the simplex pivot rule failing to find a pivot column. -/
+-- lemma is_maximised_of_col_zero_of_tableau {T : tableau m n} {obj : fin m} (hT : T.feasible)
+--   (h : ∀ s, (T.to_matrix obj s = 0 ∨ colg (T.to_partition) s ∈ T.restricted) ∧
+--       (T.to_matrix obj s ≤ 0 ∨ colg (T.to_partition) s ∉ T.restricted)) :
+--   T.is_maximised (T.of_col 0) (T.to_partition.rowg obj) :=
+-- is_maximis
 
-@[simp] lemma iterate_flat (p : pivot_rule m n) (T : tableau m n) :
-  (T.iterate p).flat = T.flat :=
-iterate_induction_on (λ T', T'.flat = T.flat) p T rfl $
-  assume T' r s (hT' : T'.flat = T.flat) hrs, by rw [← hT', flat_pivot (p.ne_zero hrs)]
+-- /-- definition used to define well-foundedness of a pivot rule -/
+-- inductive rel_gen {α : Type*} (f : α → option α) : α → α → Prop
+-- | of_mem : ∀ {x y}, x ∈ f y → rel_gen x y
+-- | trans : ∀ {x y z}, rel_gen x y → rel_gen y z → rel_gen x z
 
-@[simp] lemma iterate_sol_set (p : pivot_rule m n) (T : tableau m n) :
-  (T.iterate p).sol_set = T.sol_set :=
-iterate_induction_on (λ T', T'.sol_set = T.sol_set) p T rfl $
-  assume T' r s (hT' : T'.sol_set = T.sol_set) hrs,
-    by rw [← hT', sol_set_pivot (p.ne_zero hrs)]
+-- /-- A pivot rule is a function that selects a nonzero pivot, given a tableau, such that
+--   iterating using this pivot rule terminates. -/
+-- structure pivot_rule (m n : ℕ) : Type :=
+-- (pivot_indices : tableau m n → option (fin m × fin n))
+-- (well_founded : well_founded (rel_gen (λ T, pivot_indices T >>= λ i, T.pivot i.1 i.2)))
+-- (ne_zero : ∀ {T r s}, (r, s) ∈ pivot_indices T → T.to_matrix r s ≠ 0)
+
+-- def pivot_rule.rel (p : pivot_rule m n) : tableau m n → tableau m n → Prop :=
+-- rel_gen (λ T, p.pivot_indices T >>= λ i, T.pivot i.1 i.2)
+
+-- lemma pivot_rule.rel_wf (p : pivot_rule m n) : well_founded p.rel := p.well_founded
+
+-- def iterate (p : pivot_rule m n) : tableau m n → tableau m n
+-- | T :=
+-- have ∀ (r : fin m) (s : fin n), (r, s) ∈ p.pivot_indices T → p.rel (T.pivot r s) T,
+--   from λ r s hrs, rel_gen.of_mem $ by rw option.mem_def.1 hrs; exact rfl,
+-- option.cases_on (p.pivot_indices T) (λ _, T)
+--   (λ i this,
+--     have wf : p.rel (T.pivot i.1 i.2) T, from this _ _ (by cases i; exact rfl),
+--     iterate (T.pivot i.1 i.2))
+--   this
+-- using_well_founded { rel_tac := λ _ _, `[exact ⟨_, p.rel_wf⟩],
+--   dec_tac := tactic.assumption }
+
+-- lemma iterate_pivot {p : pivot_rule m n} {T : tableau m n} {r : fin m} {s : fin n}
+--   (hrs : (r, s) ∈ p.pivot_indices T) : (T.pivot r s).iterate p = T.iterate p :=
+-- by conv_rhs {rw iterate}; simp [option.mem_def.1 hrs]
+
+-- @[simp] lemma pivot_indices_iterate (p : pivot_rule m n) : ∀ (T : tableau m n),
+--   p.pivot_indices (T.iterate p) = none
+-- | T :=
+-- have ∀ r s, (r, s) ∈ p.pivot_indices T → p.rel (T.pivot r s) T,
+--   from λ r s hrs, rel_gen.of_mem $ by rw option.mem_def.1 hrs; exact rfl,
+-- begin
+--   rw iterate,
+--   cases h : p.pivot_indices T with i,
+--   { simp [h] },
+--   { cases i with r s,
+--     simp [h, pivot_indices_iterate (T.pivot r s)] }
+-- end
+-- using_well_founded { rel_tac := λ _ _, `[exact ⟨_, p.rel_wf⟩], dec_tac := `[tauto] }
+
+-- /- Is there some nice elaborator attribute for this, to avoid `P` having to be explicit? -/
+-- lemma iterate_induction_on (P : tableau m n → Prop) (p : pivot_rule m n) :
+--   ∀ T : tableau m n, P T → (∀ T' r s, P T' → (r, s) ∈ p.pivot_indices T'
+--     → P (T'.pivot r s)) → P (T.iterate p)
+-- | T := λ hT ih,
+-- have ∀ r s, (r, s) ∈ p.pivot_indices T → p.rel (T.pivot r s) T,
+--   from λ r s hrs, rel_gen.of_mem $ by rw option.mem_def.1 hrs; exact rfl,
+-- begin
+--   rw iterate,
+--   cases h : p.pivot_indices T with i,
+--   { simp [hT, h] },
+--   { cases i with r s,
+--     simp [h, iterate_induction_on _ (ih _ _ _ hT h) ih] }
+-- end
+-- using_well_founded { rel_tac := λ _ _, `[exact ⟨_, p.rel_wf⟩], dec_tac := `[tauto] }
+
+-- @[simp] lemma iterate_flat (p : pivot_rule m n) (T : tableau m n) :
+--   (T.iterate p).flat = T.flat :=
+-- iterate_induction_on (λ T', T'.flat = T.flat) p T rfl $
+--   assume T' r s (hT' : T'.flat = T.flat) hrs, by rw [← hT', flat_pivot (p.ne_zero hrs)]
+
+-- @[simp] lemma iterate_sol_set (p : pivot_rule m n) (T : tableau m n) :
+--   (T.iterate p).sol_set = T.sol_set :=
+-- iterate_induction_on (λ T', T'.sol_set = T.sol_set) p T rfl $
+--   assume T' r s (hT' : T'.sol_set = T.sol_set) hrs,
+--     by rw [← hT', sol_set_pivot (p.ne_zero hrs)]
 
 namespace simplex
 
@@ -547,17 +622,6 @@ begin
   { finish [h, fin.find_eq_some_iff, fin.find_eq_none_iff, lt_irrefl (0 : ℚ)] },
   { finish [fin.find_eq_some_iff] }
 end
-
--- lemma find_pivot_column_eq_none_aux {T : tableau m n} {i : fin m} {s : fin n} :
---   find_pivot_column T i = none ↔ (∀ s, T.to_matrix i s ≤ 0) :=
--- begin
---   simp [find_pivot_column, fin.find_eq_none_iff],
---   cases h : fin.find (λ s : fin n, T.to_matrix i s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted),
---   { finish [fin.find_eq_none_iff] },
---   { simp [find_eq_some_iff] at *, }
-
-
--- end
 
 lemma find_pivot_column_eq_none {T : tableau m n} {obj : fin m} (hT : T.feasible)
   (h : find_pivot_column T obj = none) : T.is_maximised (T.of_col 0) (T.to_partition.rowg obj) :=
@@ -585,50 +649,89 @@ lemma find_pivot_row_eq_none_aux {T : tableau m n} {obj : fin m} {c : fin n}
   ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted → 0 ≤ T.to_matrix obj c / T.to_matrix r c :=
 by simpa [find_pivot_row, list.filter_eq_nil] using hrow
 
-lemma find_pivot_row_eq_none {T : tableau m n} {obj : fin m} {c : fin n} (hT : T.feasible)
-  (hrow : find_pivot_row T obj c = none) (hs : c ∈ find_pivot_column T obj) :
-  T.is_unbounded_above (T.to_partition.rowg obj) :=
-have hrow : ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted →
-    0 ≤ T.to_matrix obj c / T.to_matrix r c,
-  from find_pivot_row_eq_none_aux hrow hs,
-have hc : (T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
-    ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted),
-  from find_pivot_column_spec hs,
-have hToc : T.to_matrix obj c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hc,
-(lt_or_gt_of_ne hToc).elim
-  (λ hToc : T.to_matrix obj c < 0, is_unbounded_above_rowg_of_nonpos hT c
-    (hc.elim and.right (λ h, (not_lt_of_gt hToc h.1).elim))
-    (λ i hi, classical.by_cases
-      (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
-      (λ hoi : obj ≠ i, inv_nonpos.1 $ nonpos_of_mul_nonneg_right (hrow _ hoi hi) hToc))
-    hToc)
-  (λ hToc : 0 < T.to_matrix obj c, is_unbounded_above_rowg_of_nonneg hT c
-    (λ i hi, classical.by_cases
-      (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
-      (λ hoi : obj ≠ i, inv_nonneg.1 $ nonneg_of_mul_nonneg_left (hrow _ hoi hi) hToc))
-    hToc)
+def feasible_of_mem_pivot_row_and_column {T : tableau m n} {obj : fin m} (hT : T.feasible) {c}
+  (hc : c ∈ find_pivot_column T obj) {r} (hr : r ∈ find_pivot_row T obj c) :
+  feasible (T.pivot r c) :=
+begin
+  have := find_pivot_column_spec hc,
+  have := find_pivot_row_spec hr,
+  have := @feasible_pivot _ _ _ obj hT r c,
+  tauto
+end
 
-/-- This `pivot_rule` maximises the sample value of `i` -/
-def simplex_pivot_rule (i : fin m) : pivot_rule m n :=
-{ pivot_indices := λ T, find_pivot_column T i >>= λ s,
-    find_pivot_row T i s >>= λ r, some (r, s),
-  well_founded := sorry,
-  ne_zero := λ T r s, begin
-    simp only [option.mem_def, option.bind_eq_some,
-      find_pivot_row, list.argmin_eq_some_iff, and_imp,
-      exists_imp_distrib, prod.mk.inj_iff, list.mem_filter],
-    intros,
-    substs x r,
-    assume h,
-    simp [h, lt_irrefl, *] at *
-  end  }
+inductive termination : Type
+| while     : termination
+| unbounded : termination
+| maximised : termination
 
 end simplex
 
-def simplex (T : tableau m n) (i : fin m) : tableau m n :=
-T.iterate (simplex.simplex_pivot_rule i)
+open simplex simplex.termination
+
+/-- The simplex algorithm -/
+def simplex (w : tableau m n → bool) : Π (T : tableau m n) (hT : feasible T) (obj : fin m),
+  tableau m n × termination
+| T hT obj := cond (w T)
+  (match find_pivot_column T obj, @feasible_of_mem_pivot_row_and_column _ _ _ obj hT with
+    | none,   hc := (T, unbounded)
+    | some c, hc :=
+      match find_pivot_row T obj c, @hc _ rfl with
+      | none,   hr := (T, maximised)
+      | some r, hr := have wf : tableau.sizeof m n (pivot T r c) < tableau.sizeof m n T, from sorry,
+        simplex (T.pivot r c) (hr rfl) obj
+      end
+    end)
+  (T, while)
 
 namespace simplex
+
+lemma simplex_pivot {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
+  (hw : w T = tt) {obj : fin m} {r : fin m} {c : fin n}
+  (hc : c ∈ find_pivot_column T obj) (hr : r ∈ find_pivot_row T obj c) :
+  (T.pivot r c).simplex w (feasible_of_mem_pivot_row_and_column hT hc hr) obj =
+  T.simplex w hT obj :=
+by conv_rhs { rw simplex };
+  simp [hw, show _ = _, from hr, show _ = _, from hc, _match_1, _match_2]
+
+lemma simplex_while_eq_ff {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
+  {obj : fin m} (hw : w T = ff) : T.simplex w hT obj = (T, while) :=
+by rw [simplex, hw]; refl
+
+lemma simplex_find_pivot_column_eq_none {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
+  (hw : w T = tt) {obj : fin m} (hc : find_pivot_column T obj = none) :
+  T.simplex w hT obj = (T, unbounded) :=
+by rw simplex; simp [hc, hw, _match_1]
+
+lemma simplex_find_pivot_row_eq_none {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
+  {obj : fin m} (hw : w T = tt) {c} (hc : c ∈ find_pivot_column T obj)
+  (hr : find_pivot_row T obj c = none) : T.simplex w hT obj = (T, maximised) :=
+by rw simplex; simp [hw, show _ = _, from hc, hr, _match_1, _match_2]
+
+lemma simplex_induction (P : tableau m n → Prop) {w : tableau m n → bool} : Π {T : tableau m n}
+  (hT : feasible T) {obj : fin m} (h0 : P T)
+  (hpivot : ∀ {T' r c}, w T' = tt → c ∈ find_pivot_column T' obj → r ∈ find_pivot_row T' obj c
+    → feasible T' → P T' → P (T'.pivot r c)),
+  P (simplex w T hT obj).1
+| T hT obj h0 hpivot :=
+  begin
+    cases hw : w T,
+    { rwa [simplex_while_eq_ff hw] },
+    { cases hc : find_pivot_column T obj with c,
+      { rwa [simplex_find_pivot_column_eq_none hw hc] },
+      { cases hr : find_pivot_row T obj c with r,
+        { rwa simplex_find_pivot_row_eq_none hw hc hr },
+        { rw [← simplex_pivot hw hc hr],
+          exact have wf : tableau.sizeof m n (pivot T r c) < tableau.sizeof m n T, from sorry,
+            simplex_induction (feasible_of_mem_pivot_row_and_column hT hc hr)
+              (hpivot hw hc hr hT h0) @hpivot } } }
+  end
+
+lemma simplex_feasible {w : tableau m n → bool} {T : tableau m n}
+  (hT : feasible T) {obj : fin m} : feasible (T.simplex w hT obj).1 :=
+simplex_induction feasible _ _ _
+
+lemma simplex_simplex {w : tableau m n → bool} {T : tableau m n} (hT : feasible T) {obj : fin m} :
+  (T.simplex w hT obj).1.simplex w _ obj
 
 /-- The simplex algorithm does not pivot the variable it is trying to optimise -/
 lemma simplex_pivot_indices_ne {T : tableau m n} {i : fin m} {r s} :
@@ -667,44 +770,7 @@ begin
   simp only [and_comm _ (_ = s), @and.left_comm _ (_ = s), exists_eq_left]
 end
 
-lemma simplex_pivot_rule_feasible {T : tableau m n} {i : fin m} (hT : T.feasible)
-  {r s} (hrs : (r, s) ∈ (simplex_pivot_rule i).pivot_indices T) : (T.pivot r s).feasible :=
-λ i' hi', begin
-  rw [mem_simplex_pivot_rule_indices] at hrs,
-  have hs := find_pivot_column_spec hrs.1,
-  have hr := find_pivot_row_spec hrs.2,
-  dsimp only [pivot],
-  by_cases hir : i' = r,
-  { subst i',
-    rw [if_pos rfl, neg_mul_eq_neg_mul_symm, neg_nonneg],
-    exact mul_nonpos_of_nonneg_of_nonpos (hT _ hr.2.1)
-      (le_of_lt (neg_of_mul_neg_left hr.2.2.1 (le_of_lt (by simp * at *)))) },
-  { rw if_neg hir,
-    rw [to_partition_pivot, rowg_swap_of_ne _ hir, restricted_pivot] at hi',
-    by_cases hii : i = i',
-    { subst i',
-      refine add_nonneg (hT _ hi') (neg_nonneg.2 _),
-      rw [mul_assoc, mul_left_comm],
-      exact mul_nonpos_of_nonneg_of_nonpos (hT _ hr.2.1) (le_of_lt hr.2.2.1) },
-    { by_cases hTi'r : 0 < T.to_matrix i' s / T.to_matrix r s,
-      { have hTi's0 : T.to_matrix i' s ≠ 0, from λ h, by simpa [h, lt_irrefl] using hTi'r,
-        have hTrs0 : T.to_matrix r s ≠ 0, from λ h, by simpa [h, lt_irrefl] using hTi'r,
-        have hTii' : T.to_matrix i s / T.to_matrix i' s < 0,
-        { suffices : (T.to_matrix i s / T.to_matrix r s) / (T.to_matrix i' s / T.to_matrix r s) < 0,
-          { simp only [div_eq_mul_inv, mul_assoc, mul_inv', inv_inv',
-              mul_left_comm (T.to_matrix r s), mul_left_comm (T.to_matrix r s)⁻¹,
-              mul_comm (T.to_matrix r s), inv_mul_cancel hTrs0, mul_one] at this,
-            simpa [mul_comm, div_eq_mul_inv] },
-        { exact div_neg_of_neg_of_pos hr.2.2.1 hTi'r } },
-        have := hr.2.2.2 _ hii hi' hTii',
-        rwa [abs_div, abs_div, abs_of_nonneg (hT _ hr.2.1), abs_of_nonneg (hT _ hi'),
-          le_div_iff (abs_pos_iff.2 hTi's0), div_eq_mul_inv, mul_right_comm, ← abs_inv, mul_assoc,
-          ← abs_mul, ← div_eq_mul_inv, abs_of_nonneg (le_of_lt hTi'r), ← sub_nonneg,
-          ← mul_div_assoc, div_eq_mul_inv, mul_comm (T.offset r 0)] at this },
-      { refine add_nonneg (hT _ hi') (neg_nonneg.2 _),
-        rw [mul_assoc, mul_left_comm],
-        exact mul_nonpos_of_nonneg_of_nonpos (hT _ hr.2.1) (le_of_not_gt hTi'r) } } }
-end
+
 
 lemma simplex_feasible {T : tableau m n} (hT : T.feasible) (i : fin m) : (simplex T i).feasible :=
 iterate_induction_on feasible _ _ hT (λ _ _ _ hT, simplex_pivot_rule_feasible hT)
@@ -818,20 +884,32 @@ end
 end
 
 end add_row
+
 open tableau.simplex
 
-/-- Boolean returning whether  -/
+/-- Boolean returning whether or not it is consistent to make `i` nonnegative. Only makes sense for
+  feasible tableaux. Wrong in unbounded case -/
 def max_nonneg (T : tableau m n) (i : fin m) : bool :=
 0 ≤ (simplex T i).offset i 0
+#print option.get
 
 lemma max_nonneg_iff (T : tableau m n) (hT : T.feasible) (i : fin m) :
   T.max_nonneg i ↔ ∃ x : cvec (m + n), x ∈ T.sol_set ∧ 0 ≤ x (T.to_partition.rowg i) 0 :=
 by simp [max_nonneg, bool.of_to_bool_iff]; exact
 ⟨λ h, ⟨(T.simplex i).of_col 0, by rw [← simplex_sol_set i,
     ← feasible_iff_of_col_zero_mem_sol_set]; exact simplex_feasible hT _,
-  _⟩ ,
+  by rw [← rowg_simplex]; simpa [of_col_rowg]⟩,
+λ ⟨x, hx⟩, (simplex_unbounded_or_maximised hT i).elim
+  (λ h, le_trans hx.2 (begin
+      have := h x (by simpa using hx.1),
+      rw [← rowg_simplex _ i, of_col_rowg] at this,
+      simpa [rowg_simplex] using this
+    end))
+  (λ h, begin
+    cases h 0 with x hx,
 
-_⟩
+
+  end)⟩
 
 
 section assertge
@@ -879,9 +957,9 @@ def T : tableau 25 10 :=
   offset := λ i _, 1,
   to_partition := default _,
   restricted := univ }
-#print random_gen
+#eval tableau.sizeof _ _ T
 #print tc.rec
-#print nat
+
 #eval let s := T.simplex 0 in (s.to_partition.row_indices).1
 
 end test
