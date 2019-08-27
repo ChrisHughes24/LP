@@ -61,7 +61,7 @@ begin
   simp [list.nodup_append] at this, tauto
 end
 
-lemma rowg_ne_colg (i j) : B.rowg i ≠ B.colg j :=
+@[simp] lemma rowg_ne_colg (i j) : B.rowg i ≠ B.colg j :=
 λ h, begin
   rw [rowg, colg] at h,
   have := B.row_indices_append_col_indices_nodup,
@@ -69,6 +69,8 @@ lemma rowg_ne_colg (i j) : B.rowg i ≠ B.colg j :=
     list.disjoint_right] at this,
   exact this.2.2 (by rw h; exact vector.nth_mem _ _) (vector.nth_mem i B.row_indices)
 end
+
+@[simp] lemma colg_ne_rowg (i j) : B.colg j ≠ B.rowg i := ne.symm $ rowg_ne_colg _ _ _
 
 lemma injective_rowg : injective B.rowg :=
 vector.nodup_iff_nth_inj.1 B.row_indices_nodup
@@ -124,7 +126,7 @@ B.colp.mem_iff_mem.2 (colg_mem _ _)
 begin
   ext,
   simp, dsimp [pequiv.trans, pequiv.symm],
-  simp [B.rowp_eq_some_rowg, colp, fin.find_eq_some_iff, (B.rowg_ne_colg _ _).symm]
+  simp [B.rowp_eq_some_rowg, colp, fin.find_eq_some_iff]
 end
 
 lemma fin.coe_eq_val (a : fin n) : (a : ℕ) = a.val := rfl
