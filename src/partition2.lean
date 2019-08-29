@@ -129,7 +129,17 @@ begin
   simp [B.rowp_eq_some_rowg, colp, fin.find_eq_some_iff]
 end
 
-lemma fin.coe_eq_val (a : fin n) : (a : ℕ) = a.val := rfl
+@[simp] lemma colg_get_colp_symm (v : fin (m + n)) (h : (B.colp.symm v).is_some) :
+  B.colg (option.get h) = v :=
+let ⟨j, hj⟩ := option.is_some_iff_exists.1 h in
+have hj' : j ∈ B.colp.symm (B.colg (option.get h)), by simpa,
+B.colp.symm.inj hj' hj
+
+@[simp] lemma rowg_get_rowp_symm (v : fin (m + n)) (h : (B.rowp.symm v).is_some) :
+  B.rowg (option.get h) = v :=
+let ⟨i, hi⟩ := option.is_some_iff_exists.1 h in
+have hi' : i ∈ B.rowp.symm (B.rowg (option.get h)), by simpa,
+B.rowp.symm.inj hi' hi
 
 def default : partition m n :=
 { row_indices := ⟨(list.fin_range m).map (fin.cast_add _), by simp⟩,
