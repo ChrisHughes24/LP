@@ -604,19 +604,11 @@ option.cases_on
     T.to_partition.colg)
   some
 
-lemma injective_prod_mk_left {α β γ : Type*} {f : γ → α × β} (hf : injective (prod.fst ∘ f)) :
-  injective f :=
-λ x y hxy, hf (congr_arg prod.fst hxy : _)
-
-lemma injective_prod_mk_right {α β γ : Type*} {f : γ → α × β} (hf : injective (prod.snd ∘ f)) :
-  injective f :=
-λ x y hxy, hf (congr_arg prod.snd hxy : _)
-
 def pivot_row_linear_order (T : tableau m n) (c : fin n) : decidable_linear_order (fin m) :=
 decidable_linear_order.lift
   (show fin m → lex ℚ (fin (m + n)),
     from λ r', (abs (T.offset r' 0 / T.to_matrix r' c), T.to_partition.rowg r'))
-  (injective_prod_mk_right (injective_rowg _))
+  (λ x y, by simp [T.to_partition.injective_rowg.eq_iff])
   (by apply_instance)
 
 section
@@ -644,15 +636,29 @@ let l := (list.fin_range m).filter (λ r : fin m, obj ≠ r ∧ T.to_partition.r
   ∧ T.to_matrix obj c / T.to_matrix r c < 0) in
 @list.minimum _ (pivot_row_linear_order T c) l
 
-lemma find_pivot_column_spec {T : tableau m n} {obj : fin m} {s : fin n} :
-  s ∈ find_pivot_column T obj → (T.to_matrix obj s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted)
-  ∨ (0 < T.to_matrix obj s ∧ T.to_partition.colg s ∈ T.restricted) :=
+lemma find_pivot_column_spec {T : tableau m n} {obj : fin m} {c : fin n} :
+  c ∈ find_pivot_column T obj → (T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
+  ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted) :=
 begin
   simp [find_pivot_column],
-  cases h : fin.find (λ s : fin n, T.to_matrix obj s ≠ 0 ∧ T.to_partition.colg s ∉ T.restricted),
+  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted),
   { finish [h, fin.find_eq_some_iff, fin.find_eq_none_iff, lt_irrefl (0 : ℚ),
       list.argmin_eq_some_iff] },
   { finish [fin.find_eq_some_iff] }
+end
+
+lemma nonpos_of_lt_find_pivot_column {T : tableau m n} {obj : fin m} {c j : fin n}
+  (hc : c ∈ find_pivot_column T obj) (hcres : T.to_partition.colg c ∈ T.restricted)
+  (hjc : T.to_partition.colg j < T.to_partition.colg c) :
+  T.to_matrix obj j ≤ 0 :=
+begin
+  rw [find_pivot_column] at hc,
+  cases h : fin.find (λ c, T.to_matrix obj c ≠ 0 ∧ colg (T.to_partition) c ∉ T.restricted),
+  { rw h at hc,
+    refine le_of_not_lt (λ hj0, _),
+    exact not_le_of_gt hjc ((list.mem_argmin_iff.1 hc).2.1 j (list.mem_filter.2 (by simp [hj0]))) },
+  { rw h at hc,
+    simp [*, fin.find_eq_some_iff] at * }
 end
 
 lemma find_pivot_column_eq_none {T : tableau m n} {obj : fin m} (hT : T.feasible)
@@ -683,6 +689,22 @@ begin
   cases h r' hor' hres' hr0',
   { exact le_of_lt (by assumption) },
   { exact le_of_eq (by tauto) }
+end
+
+lemma nonneg_of_lt_find_pivot_row {T : tableau m n} {obj : fin m} {r i : fin m} {c : fin n}
+  (hc0 : 0 < T.to_matrix obj c) (hres : T.to_partition.rowg i ∈ T.restricted)
+  (hc : c ∈ find_pivot_column T obj) (hr : r ∈ find_pivot_row T obj c)
+  (hoff : T.offset i 0 = 0)
+  (hjc : T.to_partition.rowg i < T.to_partition.rowg r) :
+  0 ≤ T.to_matrix i c :=
+if hobj : obj = i then le_of_lt $ hobj ▸ hc0
+else
+le_of_not_gt $ λ hic, not_le_of_lt hjc
+begin
+  have := ((@list.minimum_eq_coe_iff _ (id _) _ _).1 hr).2 i
+    (list.mem_filter.2 ⟨list.mem_fin_range _, hobj, hres, div_neg_of_pos_of_neg hc0 hic⟩),
+  rw [pivot_row_linear_order_le_def] at this,
+  simp [hoff, not_lt_of_ge (abs_nonneg _), *] at *
 end
 
 lemma ne_zero_of_mem_find_pivot_row {T : tableau m n} {obj r : fin m} {c : fin n}
@@ -749,8 +771,12 @@ lemma not_unique_row_and_unique_col {T T' : tableau m n} {r c c'}
   (hrobj : T.to_partition.rowg obj = T'.to_partition.rowg obj)
   (hfickle : ∀ i, T.to_partition.rowg i ≠ T'.to_partition.rowg i → T.offset i 0 = 0)
   (hobj : T.offset obj 0 = T'.offset obj 0)
-  (unique_col : ∀ j ≠ c', T'.to_matrix obj j ≤ 0)
-  (unique_row : ∀ i ≠ r, T.offset i 0 = 0 → 0 ≤ T.to_matrix i c) :
+  (nonpos_of_colg_ne : ∀ j,
+    T'.to_partition.colg j ≠ T.to_partition.colg j → j ≠ c' → T'.to_matrix obj j ≤ 0)
+  (nonpos_of_colg_eq : ∀ j, j ≠ c' →
+    T'.to_partition.colg j = T.to_partition.colg c → T'.to_matrix obj j ≤ 0)
+  (unique_row : ∀ i ≠ r, T.offset i 0 = 0 → T.to_partition.rowg i ≠ T'.to_partition.rowg i →
+    0 ≤ T.to_matrix i c) :
   false :=
 let objr := T.to_partition.rowg obj in
 let x := λ y : ℚ, T.of_col (y • (single c 0).to_matrix) in
@@ -820,7 +846,8 @@ have sumpos : 0 < univ.sum (λ i, c_star (T.to_partition.rowg i) * T.to_matrix i
       simp only [c_star, neg_nonneg],
       cases h : T'.to_partition.colp.symm (T.to_partition.colg c) with j,
       { refl },
-      { exact unique_col _ (λ hjc', hcolnec' $ hjc' ▸ h) }
+      { exact nonpos_of_colg_eq j (mt (congr_arg some) (h ▸ hcolnec'))
+          (by rw [← (option.eq_some_iff_get_eq.1 h).snd]; simp) }
     end),
 have hexi : ∃ i, 0 < c_star (T.to_partition.rowg i) * T.to_matrix i c,
   from imp_of_not_imp_not _ _ (by simpa using @sum_nonpos _ _ (@univ (fin m) _)
@@ -841,11 +868,13 @@ have hir : i ≠ r, from λ hir, begin
   end,
 have hnec' : option.get hi_some ≠ c',
   from λ eq_c', hir $ @eq_of_roweqc' i (eq_c' ▸ by simp),
-have hic0 : T.to_matrix i c < 0, from neg_of_mul_pos_right hi' (unique_col _ hnec'),
-not_le_of_gt hic0 (unique_row i hir hi0)
+have hic0 : T.to_matrix i c < 0,
+  from neg_of_mul_pos_right hi' (nonpos_of_colg_ne _ (by simp) hnec'),
+not_le_of_gt hic0 (unique_row _ hir hi0
+  (by rw [← colg_get_colp_symm _ _ hi_some]; exact colg_ne_rowg _ _ _))
 
 inductive rel : tableau m n → tableau m n → Prop
-| pivot : ∀ {T r c}, feasible T → c ∈ find_pivot_column T obj →
+| pivot : ∀ {T}, feasible T → ∀ {r c}, c ∈ find_pivot_column T obj →
   r ∈ find_pivot_row T obj c → rel (T.pivot r c) T
 | trans_pivot : ∀ {T₁ T₂ r c}, rel T₁ T₂ → c ∈ find_pivot_column T₁ obj →
   r ∈ find_pivot_row T₁ obj c → rel (T₁.pivot r c) T₂
@@ -854,7 +883,7 @@ lemma feasible_of_rel_right {T T' : tableau m n} (h : rel obj T' T) : T.feasible
 rel.rec_on h (by tauto) (by tauto)
 
 lemma feasible_of_rel_left {T T' : tableau m n} (h : rel obj T' T) : T'.feasible :=
-rel.rec_on h (λ _ _ _ hT hc hr, feasible_of_mem_pivot_row_and_column hT hc hr)
+rel.rec_on h (λ _ hT _ _ hc hr, feasible_of_mem_pivot_row_and_column hT hc hr)
   (λ _ _ _ _ _ hc hr hT, feasible_of_mem_pivot_row_and_column hT hc hr)
 
 /-- Slightly stronger recursor than the default recursor -/
@@ -868,7 +897,7 @@ lemma rel.rec_on' {obj : fin m} {C : tableau m n → tableau m n → Prop} {T T'
      c ∈ find_pivot_column T₁ obj →
      r ∈ find_pivot_row T₁ obj c → C (T₁.pivot r c) T₁ → C T₁ T₂ → C (pivot T₁ r c) T₂) :
   C T T' :=
-rel.rec_on hrel @hpivot (λ T₁ T₂ r c hrelT₁₂ hc hr ih, hpivot_trans
+rel.rec_on hrel (λ T hT r c  hc hr, hpivot hT hc hr) (λ T₁ T₂ r c hrelT₁₂ hc hr ih, hpivot_trans
   (rel.pivot (feasible_of_rel_left obj hrelT₁₂) hc hr) hrelT₁₂ hc hr
   (hpivot (feasible_of_rel_left obj hrelT₁₂) hc hr) ih)
 
@@ -884,6 +913,14 @@ lemma flat_eq_of_rel {T T' : tableau m n} (h : rel obj T' T) : flat T' = flat T 
 rel.rec_on' h (λ _ _ _ _ _ hr, flat_pivot (ne_zero_of_mem_find_pivot_row hr))
   (λ _ _ _ _ _ _ _ _, eq.trans)
 
+lemma rowg_obj_eq_of_rel {T T' : tableau m n} (h : rel obj T T') : T.to_partition.rowg obj =
+  T'.to_partition.rowg obj :=
+rel.rec_on' h (λ T r c hfT hc hr, by simp [rowg_swap_of_ne _ (find_pivot_row_spec hr).1])
+  (λ _ _ _ _ _ _ _ _, eq.trans)
+
+lemma restricted_eq_of_rel {T T' : tableau m n} (h : rel obj T T') : T.restricted = T'.restricted :=
+rel.rec_on' h (λ _ _ _ _ _ _, rfl) (λ _ _ _ _ _ _ _ _, eq.trans)
+
 lemma exists_mem_pivot_row_column_of_rel {T T' : tableau m n} (h : rel obj T' T) :
   ∃ r c, c ∈ find_pivot_column T obj ∧ r ∈ find_pivot_row T obj c :=
 rel.rec_on' h (λ _ r c _ hc hr, ⟨r, c, hc, hr⟩) (λ _ _ _ _ _ _ _ _ _, id)
@@ -894,21 +931,24 @@ let ⟨r, c', hc', hr⟩ := exists_mem_pivot_row_column_of_rel obj h in ⟨r, by
 
 lemma colg_eq_or_exists_mem_pivot_column {T₁ T₂ : tableau m n} (h : rel obj T₂ T₁) {c : fin n} :
   T₁.to_partition.colg c = T₂.to_partition.colg c ∨
-  ∃ T₃, (T₃ = T₁ ∨ rel obj T₃ T₁) ∧ (rel obj T₂ T₃) ∧ c ∈ find_pivot_column T₃ obj :=
+  ∃ T₃, (T₃ = T₁ ∨ rel obj T₃ T₁) ∧ (rel obj T₂ T₃) ∧
+  T₃.to_partition.colg c = T₁.to_partition.colg c ∧
+  c ∈ find_pivot_column T₃ obj :=
 rel.rec_on' h begin
     assume T r c' hT hc' hr,
     by_cases hcc : c = c',
     { subst hcc,
-      exact or.inr ⟨T, or.inl rfl, rel.pivot hT hc' hr, hc'⟩ },
+      exact or.inr ⟨T, or.inl rfl, rel.pivot hT hc' hr, rfl, hc'⟩ },
     { simp [colg_swap_of_ne _ hcc] }
   end
   (λ T₁ T₂ r c hrelp₁ hrel₁₂ hc hr ihp₁ ih₁₂,
-    ihp₁.elim
-      (λ ihp₁, ih₁₂.elim
-        (λ ih₁₂, or.inl (ih₁₂.trans ihp₁))
-        (λ ⟨T₄, hT₄⟩, or.inr ⟨T₄, hT₄.1, hrelp₁.trans hT₄.2.1, hT₄.2.2⟩))
-      (λ ⟨T₄, hT₄⟩, or.inr ⟨T₄, hT₄.1.elim (λ h, h.symm ▸ or.inr hrel₁₂)
-        (λ h, or.inr $ h.trans hrel₁₂), hT₄.2.1, hT₄.2.2⟩))
+    ih₁₂.elim
+      (λ ih₁₂, ihp₁.elim
+        (λ ihp₁, or.inl (ih₁₂.trans ihp₁))
+        (λ ⟨T₃, hT₃⟩, or.inr ⟨T₃,
+          hT₃.1.elim (λ h, h.symm ▸ or.inr hrel₁₂) (λ h, or.inr $ h.trans hrel₁₂),
+          hT₃.2.1, hT₃.2.2.1.trans ih₁₂.symm, hT₃.2.2.2⟩))
+      (λ ⟨T₃, hT₃⟩, or.inr ⟨T₃, hT₃.1, hrelp₁.trans hT₃.2.1, hT₃.2.2⟩))
 
 lemma rowg_eq_or_exists_mem_pivot_row {T₁ T₂ : tableau m n} (h : rel obj T₂ T₁) (r : fin m) :
   T₁.to_partition.rowg r = T₂.to_partition.rowg r ∨
@@ -932,28 +972,6 @@ rel.rec_on' h
       (λ ⟨T₃, c', hT₃⟩, or.inr ⟨T₃, c', hT₃.1,
         (rel.pivot (feasible_of_rel_left _ hrel₁₂) hc hr).trans hT₃.2.1, hT₃.2.2⟩))
 
--- lemma rowg_eq_or_exists_mem_pivot_row' {T₁ T₂ : tableau m n} (h : rel obj T₂ T₁) (r : fin m) :
---   T₁.to_partition.rowg r = T₂.to_partition.rowg r ∨
---   ∃ (T₃ : tableau m n) c, (T₃ = T₁ ∨ rel obj T₃ T₁) ∧ (rel obj T₂ T₃) ∧
---     T₃.to_partition.rowg r = T₁.to_partition.rowg r ∧
---     c ∈ find_pivot_column T₃ obj ∧ r ∈ find_pivot_row T₃ obj c :=
--- rel.rec_on' h
---   begin
---     assume T r' c hT hc hr',
---     by_cases hrr : r = r',
---     { subst hrr,
---       exact or.inr ⟨T, c, or.inl rfl, rel.pivot hT hc hr', rfl, hc, hr'⟩ },
---     { simp [rowg_swap_of_ne _ hrr] }
---   end
---   (λ T₁ T₂ r c hrelp₁ hrel₁₂ hc hr ihp₁ ih₁₂,
---     ih₁₂.elim
---       (λ ih₁₂, ihp₁.elim
---         (λ ihp₁, or.inl $ ih₁₂.trans ihp₁)
---         (λ ⟨T₃, c', hT₃⟩, or.inr ⟨T₃, c', hT₃.1.elim (λ h, h.symm ▸ or.inr hrel₁₂)
---            (λ h, or.inr $ h.trans hrel₁₂), hT₃.2.1, ih₁₂.symm ▸ hT₃.2.2.1, hT₃.2.2.2⟩))
---       (λ ⟨T₃, c', hT₃⟩, or.inr ⟨T₃, c', hT₃.1,
---         (rel.pivot (feasible_of_rel_left _ hrel₁₂) hc hr).trans hT₃.2.1, hT₃.2.2⟩))
-
 lemma eq_or_rel_pivot_of_rel {T₁ T₂ : tableau m n} (h : rel obj T₁ T₂) : ∀ {r c}
   (hc : c ∈ find_pivot_column T₂ obj) (hr : r ∈ find_pivot_row T₂ obj c),
   T₁ = T₂.pivot r c ∨ rel obj T₁ (T₂.pivot r c) :=
@@ -962,6 +980,30 @@ rel.rec_on' h (λ T r c hT hc hr r' c' hc' hr', by simp * at *)
     (ih₁₂ hc' hr').elim
       (λ ih₁₂, or.inr $ ih₁₂ ▸ rel.pivot (feasible_of_rel_left _ hrel₁₂) hc hr)
       (λ ih₁₂, or.inr $ (rel.pivot (feasible_of_rel_left _ hrel₁₂) hc hr).trans ih₁₂))
+
+lemma exists_mem_pivot_column_of_mem_pivot_row {T : tableau m n} (hrelTT : rel obj T T)
+  {r c} (hc : c ∈ find_pivot_column T obj) (hr : r ∈ find_pivot_row T obj c) :
+  ∃ (T' : tableau m n), c ∈ find_pivot_column T' obj ∧ T'.to_partition.colg c =
+  T.to_partition.rowg r ∧ rel obj T' T ∧ rel obj T T' :=
+have hrelTTp : rel obj T (T.pivot r c),
+  from (eq_or_rel_pivot_of_rel _ hrelTT hc hr).elim (λ h, h ▸ hrelTT ) id,
+let ⟨T', hT'⟩ := (colg_eq_or_exists_mem_pivot_column obj hrelTTp).resolve_left
+  (show (T.pivot r c).to_partition.colg c ≠ T.to_partition.colg c, by simp) in
+⟨T', hT'.2.2.2, by simp [hT'.2.2.1], hT'.1.elim
+  (λ h, h.symm ▸ rel.pivot (feasible_of_rel_left _ hrelTT) hc hr)
+  (λ h, h.trans $ rel.pivot (feasible_of_rel_left _ hrelTT) hc hr), hT'.2.1⟩
+
+lemma exists_mem_pivot_column_of_rowg_ne {T T' : tableau m n} (hrelTT' : rel obj T T') {r : fin m}
+  (hrelT'T : rel obj T' T) (hrow : T.to_partition.rowg r ≠ T'.to_partition.rowg r) :
+  ∃ (T₃ : tableau m n) c, c ∈ find_pivot_column T₃ obj ∧ T₃.to_partition.colg c =
+  T.to_partition.rowg r ∧ rel obj T₃ T ∧ rel obj T T₃ :=
+let ⟨T₃, c, hT₃, hrelT₃T, hrow₃, hc, hr⟩ :=
+  (rowg_eq_or_exists_mem_pivot_row obj hrelT'T _).resolve_left hrow in
+let ⟨T₄, hT₄⟩ := exists_mem_pivot_column_of_mem_pivot_row obj
+  (show rel obj T₃ T₃, from hT₃.elim (λ h, h.symm ▸ hrelTT'.trans hrelT'T)
+    (λ h, h.trans $ hrelTT'.trans hrelT₃T)) hc hr in
+⟨T₄, c, hT₄.1, hT₄.2.1.trans hrow₃, hT₄.2.2.1.trans $ hT₃.elim (λ h, h.symm ▸ hrelTT'.trans hrelT'T)
+  (λ h, h.trans $ hrelTT'.trans hrelT'T), hrelTT'.trans (hrelT₃T.trans hT₄.2.2.2)⟩
 
 lemma offset_obj_le_of_rel {T₁ T₂ : tableau m n} (h : rel obj T₁ T₂) :
   T₂.offset obj 0 ≤ T₁.offset obj 0 :=
@@ -974,7 +1016,7 @@ lemma offset_obj_eq_of_rel_of_rel {T₁ T₂ : tableau m n} (h₁₂ : rel obj T
   (h₂₁ : rel obj T₂ T₁) : T₁.offset obj 0 = T₂.offset obj 0 :=
 le_antisymm (offset_obj_le_of_rel _ h₂₁) (offset_obj_le_of_rel _ h₁₂)
 
-lemma offset_eq_offset_of_offset_obj_eq_zero {T₁ T₂ : tableau m n} (h₁₂ : rel obj T₁ T₂) :
+lemma offset_eq_offset_of_offset_obj_eq {T₁ T₂ : tableau m n} (h₁₂ : rel obj T₁ T₂) :
   ∀ (hobj : T₁.offset obj 0 = T₂.offset obj 0) (i : fin m), T₁.offset i 0 = T₂.offset i 0 :=
 rel.rec_on' h₁₂
   (λ T r c hfT hc hr hobj i,
@@ -990,104 +1032,47 @@ rel.rec_on' h₁₂
         (offset_obj_le_of_rel _ hrelp₁),
     by rw [ihp₁ hobjp, ih₁₂ (hobjp.symm.trans hobj)])
 
-lemma offset_eq_zero_of_rel_of_rel_of_rel_of_rel {T₁ T₂ : tableau m n} (h₁₂ : rel obj T₁ T₂) :
-  ∀ (h₂₁ : rel obj T₂ T₁) (T₃ : tableau m n)
-  (h₁₃ : T₁ = T₃ ∨ rel obj T₁ T₃) (h₃₂ : T₃ = T₂ ∨ rel obj T₃ T₂)
-  {r c} (hc : c ∈ find_pivot_column T₃ obj)
-  (hr : r ∈ find_pivot_row T₃ obj c), T₃.offset r 0 = 0 :=
-rel.rec_on' h₁₂
-  (λ T r c hfT hc hr hrelp T₃ hrelp₃ hrel₃₁ r' c' hc' hr',
-    have hfT₃ : feasible T₃, from hrel₃₁.elim (λ h, h.symm ▸ hfT) (feasible_of_rel_left _),
-    offset_eq_zero_of_offset_obj_eq hfT₃ (ne_zero_of_mem_find_pivot_column hc')
-      (ne_zero_of_mem_find_pivot_row hr')
-      (find_pivot_row_spec hr').1
-      (offset_obj_eq_of_rel_of_rel _
-        (rel.pivot hfT₃ hc' hr')
-        (hrel₃₁.elim (λ h, by simp * at *)
-          (λ hrel₃₁, hrelp₃.elim
-            (λ h, begin
-                subst h,
-                cases eq_or_rel_pivot_of_rel _ hrelp hc' hr',
-                { rw ← h, exact rel.pivot hfT hc hr },
-                { exact (rel.pivot hfT hc hr).trans h }
-              end)
-            (λ hrelp₃, hrel₃₁.trans ((eq_or_rel_pivot_of_rel _ hrelp₃ hc' hr').elim
-              (λ h, h ▸ hrelp) hrelp.trans))))))
-  (λ T₁ T₂ r c hrelp₁ hrel₁₂ hc hr ihp₁ ih₁₂ hrel₂p T₃ hrelp₁₃ hrel₃₂ r' c' hc' hr',
-    ihp₁ (hrel₁₂.trans hrel₂p) _ hrelp₁₃
-      (or.inr (hrel₃₂.elim (λ h, h.symm ▸ hrel₂p.trans hrelp₁)
-        (λ h, h.trans (hrel₂p.trans hrelp₁))))
-      hc' hr')
-
-lemma offset_eq_zero_of_rel_of_rel_of_rel_of_rel {T₁ T₂ : tableau m n} (h₁₂ : rel obj T₁ T₂) :
-  ∀ (h₂₁ : rel obj T₂ T₁) (T₃ : tableau m n)
-  (h₁₃ : T₁ = T₃ ∨ rel obj T₁ T₃) (h₃₂ : T₃ = T₂ ∨ rel obj T₃ T₂)
-  {r c} (hc : c ∈ find_pivot_column T₃ obj)
-  (hr : r ∈ find_pivot_row T₃ obj c), T₁.offset r 0 = 0 :=
-rel.rec_on' h₁₂
-  (λ T r c hfT hc hr hrelp T₃ hrelp₃ hrel₃₁ r' c' hc' hr',
-    hrelp₃.elim sorry _)
-  (λ T₁ T₂ r c hrelp₁ hrel₁₂ hc hr ihp₁ ih₁₂ hrel₂p T₃ hrelp₁₃ hrel₃₂ r' c' hc' hr',
-    ihp₁ (hrel₁₂.trans hrel₂p) _ hrelp₁₃
-      (or.inr (hrel₃₂.elim (λ h, h.symm ▸ hrel₂p.trans hrelp₁)
-        (λ h, h.trans (hrel₂p.trans hrelp₁))))
-      hc' hr')
-
-lemma offset_eq_zero_of_rowg_ne_of_rel_self {T T' : tableau m n} (hrelTT' : rel obj T T') : ∀
-  (hrelT'T : rel obj T' T) (i : fin m) (hrow : T.to_partition.rowg i ≠ T'.to_partition.rowg i),
+lemma offset_eq_zero_of_rowg_ne_of_rel_self {T T' : tableau m n} (hrelTT' : rel obj T T')
+  (hrelT'T : rel obj T' T) (i : fin m) (hrow : T.to_partition.rowg i ≠ T'.to_partition.rowg i) :
   T.offset i 0 = 0 :=
-rel.rec_on' hrelTT'
-  (begin
-    intros,
-    exact offset_eq_zero_of_rel_of_rel_of_rel_of_rel obj _ _ _ _ _ _ _,
+let ⟨T₃, c, hT₃₁, hT'₃, hrow₃, hc, hi⟩ := (rowg_eq_or_exists_mem_pivot_row obj hrelT'T _).resolve_left hrow in
+have T₃.offset i 0 = 0, from offset_eq_zero_of_offset_obj_eq
+  (feasible_of_rel_right _ hT'₃) (ne_zero_of_mem_find_pivot_column hc)
+  (ne_zero_of_mem_find_pivot_row hi) (find_pivot_row_spec hi).1
+  (offset_obj_eq_of_rel_of_rel _ (rel.pivot (feasible_of_rel_right _ hT'₃) hc hi)
+    ((eq_or_rel_pivot_of_rel _ hT'₃ hc hi).elim
+      (λ h, h ▸ hT₃₁.elim (λ h, h.symm ▸ hrelTT') (λ h, h.trans hrelTT'))
+      (λ hrelT'p, hT₃₁.elim (λ h, h.symm ▸ hrelTT'.trans (h ▸ hrelT'p))
+        (λ h, h.trans $ hrelTT'.trans hrelT'p)))),
+have hobj : T₃.offset obj 0 = T.offset obj 0,
+  from hT₃₁.elim (λ h, h ▸ rfl) (λ h, offset_obj_eq_of_rel_of_rel _ h (hrelTT'.trans hT'₃)),
+hT₃₁.elim (λ h, h ▸ this) (λ h, offset_eq_offset_of_offset_obj_eq obj h hobj i ▸ this)
 
-  end)
-  _
+lemma colg_mem_restricted_of_rel_self {T : tableau m n} (hrelTT : rel obj T T)
+  {c} (hc : c ∈ find_pivot_column T obj) : T.to_partition.colg c ∈ T.restricted :=
+let ⟨r, hr⟩ := exists_mem_pivot_row_of_rel obj hrelTT hc in
+let ⟨T', c', hT', hrelTT', hrowcol, _, hr'⟩ := (rowg_eq_or_exists_mem_pivot_row obj
+    ((eq_or_rel_pivot_of_rel _ hrelTT hc hr).elim
+      (λ h, show rel obj T (T.pivot r c), from h ▸ hrelTT) id) _).resolve_left
+  (show (T.pivot r c).to_partition.rowg r ≠ T.to_partition.rowg r, by simp) in
+(restricted_eq_of_rel _ hrelTT').symm ▸ by convert (find_pivot_row_spec hr').2.1; simp [hrowcol]
 
+lemma eq_zero_of_not_mem_restricted_of_rel_self {T : tableau m n} (hrelTT : rel obj T T)
+  {j} (hjres : T.to_partition.colg j ∉ T.restricted) : T.to_matrix obj j = 0 :=
+let ⟨r, c, hc, hr⟩ := exists_mem_pivot_row_column_of_rel obj hrelTT in
+have hcres : T.to_partition.colg c ∈ T.restricted,
+  from colg_mem_restricted_of_rel_self obj hrelTT hc,
+by_contradiction $ λ h0,
+begin
+  simp [find_pivot_column] at hc,
+  cases h : fin.find (λ c, T.to_matrix obj c ≠ 0 ∧ colg (T.to_partition) c ∉ T.restricted),
+  { simp [*, fin.find_eq_none_iff] at * },
+  { rw h at hc, clear_aux_decl,
+    have := (fin.find_eq_some_iff.1 h).1,
+    simp * at * }
+end
 
-lemma offset_eq_zero_of_rowg_ne_of_offset_obj_eq {T₁ T₂ : tableau m n} (h₂₁ : rel obj T₂ T₁)
-  (hobj : T₁.offset obj 0 = T₂.offset obj 0) (i : fin m)
-  (hrow : T₁.to_partition.rowg i ≠ T₂.to_partition.rowg i) : T₁.offset i 0 = 0 :=
-let ⟨T₃, c, hT₃₁, hT₃₂, hrow, hc, hi⟩ := (
-  rowg_eq_or_exists_mem_pivot_row obj h₂₁ _).resolve_left hrow in
-have h₃obj : (T₃.pivot i c).offset obj 0 = T₃.offset obj 0,
-  from le_antisymm
-    (calc (T₃.pivot i c).offset obj 0 ≤ T₂.offset obj 0 :
-        (eq_or_rel_pivot_of_rel obj hT₃₂ hc hi).elim (λ h, h ▸ le_refl _)
-          (offset_obj_le_of_rel _)
-      ... = T₁.offset obj 0 : hobj.symm
-      ... ≤ T₃.offset obj 0 : hT₃₁.elim (λ h, h ▸ le_refl _) (offset_obj_le_of_rel _))
-    (offset_obj_le_of_rel _ (rel.pivot (feasible_of_rel_right _ hT₃₂) hc hi)),
-have hT₃i : T₃.offset i 0 = 0, from offset_eq_zero_of_offset_obj_eq (feasible_of_rel_right _ hT₃₂)
-  (ne_zero_of_mem_find_pivot_column hc) (ne_zero_of_mem_find_pivot_row hi)
-  (find_pivot_row_spec hi).1 h₃obj,
-rel.rec_on' (show rel obj T₁ T₃, from sorry) _
-  begin
-    assume T₁ T₂ r c hrelp₁ hrel₁₂ hc hr ihp₁ ih₁₂,
-
-  end hrow hT₃i
-
-lemma offset_eq_zero_of_rel_of_rel {T₁ T₂ : tableau m n} (h₂₁ : rel obj T₂ T₁) : ∀
-  (h₁₂ : rel obj T₁ T₂) (i : fin m)
-  (hrow : T₁.to_partition.rowg i ≠ T₂.to_partition.rowg i), T₁.offset i 0 = 0 :=
-rel.rec_on' h₂₁
-  (λ T r c hfT hc hr hrel₁p i hrow,
-    have hir : i = r, from by_contradiction (λ hir, by simpa [rowg_swap_of_ne _ hir] using hrow),
-    have hobjr : obj ≠ r, from (find_pivot_row_spec hr).1,
-    hir.symm ▸ offset_eq_zero_of_offset_obj_eq hfT
-      (λ h : T.to_matrix obj c = 0, by simpa [h, lt_irrefl] using find_pivot_column_spec hc)
-      (ne_zero_of_mem_find_pivot_row hr) hobjr
-        (offset_obj_eq_of_rel_of_rel _ (rel.pivot hfT hc hr) hrel₁p))
-  (λ T₁ T₂ r c hrelp₁ hrel₁₂ hc hr  ihp₁ ih₁₂ h₁₂ i hrow,
-    if hir : i = r
-      then begin
-        have := offset_obj_eq_of_rel_of_rel obj hrelp₁ (hrel₁₂.trans h₁₂),
-        have := offset_eq_zero_of_offset_obj_eq _ _ _ _ this,
-
-      end
-      else _)
-
-instance : is_irrefl (tableau m n) (rel obj) := is_irrefl.mk $
+lemma rel.irrefl {obj : fin m} : ∀ (T : tableau m n), ¬ rel obj T T :=
 λ T1 hrelT1,
 let ⟨rT1 , cT1, hrT1, hcT1⟩ := exists_mem_pivot_row_column_of_rel obj hrelT1 in
 let ⟨t, ht⟩ := finset.max_of_mem
@@ -1112,13 +1097,79 @@ have hrelTT' : rel obj T T', from hTT'.elim (λ h, h.symm ▸ hrelT'pT') (λ h, 
 have hrelTT : rel obj T T, from hrelTT'.trans hrelT'T,
 have hc't : T.to_partition.colg c ≤ t, from htmax _ T hrelTT _ hc rfl,
 have hoT'T : T'.offset obj 0 = T.offset obj 0, from offset_obj_eq_of_rel_of_rel _ hrelT'T hrelTT',
-begin
-  clear_,
-  clear hrelT1 hrT1 hcT1 T1 rT1 cT1 ht,
-  subst hct,
+have hfickle : ∀ i, T.to_partition.rowg i ≠ T'.to_partition.rowg i → T.offset i 0 = 0,
+  from offset_eq_zero_of_rowg_ne_of_rel_self obj hrelTT' hrelT'T,
+have hobj : T.offset obj 0 = T'.offset obj 0, from offset_obj_eq_of_rel_of_rel _ hrelTT' hrelT'T,
+have hflat : T.flat = T'.flat, from flat_eq_of_rel obj hrelTT',
+have hrobj : T.to_partition.rowg obj = T'.to_partition.rowg obj, from rowg_obj_eq_of_rel _ hrelTT',
+have hs : T.to_partition.rowg r = T'.to_partition.colg c', by simpa using hT'Tr,
+have hc'res : T'.to_partition.colg c' ∈ T'.restricted,
+  from hs ▸ restricted_eq_of_rel _ hrelTT' ▸ (find_pivot_row_spec hr).2.1,
+have hc'obj0 : 0 < T'.to_matrix obj c', by simpa [hc'res] using find_pivot_column_spec hcT',
+have hcres : T.to_partition.colg c ∈ T.restricted,
+  from colg_mem_restricted_of_rel_self obj hrelTT hc,
+have hcobj0 : 0 < to_matrix T obj c, by simpa [hcres] using find_pivot_column_spec hc,
+have hrc0 : T.to_matrix r c < 0,
+  from inv_neg'.1 $ neg_of_mul_neg_left (find_pivot_row_spec hr).2.2.1 (le_of_lt hcobj0),
+have nonpos_of_colg_ne : ∀ j, T'.to_partition.colg j ≠ T.to_partition.colg j → j ≠ c' →
+    T'.to_matrix obj j ≤ 0,
+  from λ j hj hjc',
+    let ⟨T₃, hT₃⟩ := (colg_eq_or_exists_mem_pivot_column obj hrelTT').resolve_left hj in
+    nonpos_of_lt_find_pivot_column hcT' hc'res
+      (lt_of_le_of_ne
+        (hct.symm ▸ hT₃.2.2.1 ▸ htmax _ T₃ (hT₃.1.elim (λ h, h.symm ▸ hrelTT'')
+          (λ h, h.trans (hrelT'T.trans hT₃.2.1))) _ hT₃.2.2.2 rfl)
+        (by rwa [ne.def, T'.to_partition.injective_colg.eq_iff])),
+have nonpos_of_colg_eq : ∀ j, j ≠ c' →
+    T'.to_partition.colg j = T.to_partition.colg c → T'.to_matrix obj j ≤ 0,
+  from λ j hjc' hj,
+    if hjc : j = c
+      then by clear_aux_decl; subst j; exact nonpos_of_lt_find_pivot_column hcT' hc'res
+        (lt_of_le_of_ne
+          (hj.symm ▸ hct.symm ▸ htmax _ _ hrelTT _ hc rfl)
+          (hs ▸ hj.symm ▸ colg_ne_rowg _ _ _))
+      else let ⟨T₃, hT₃⟩ := (colg_eq_or_exists_mem_pivot_column obj hrelTT').resolve_left
+        (show T'.to_partition.colg j ≠ T.to_partition.colg j,
+          by simpa [hj, T.to_partition.injective_colg.eq_iff, eq_comm] using hjc) in
+      nonpos_of_lt_find_pivot_column hcT' hc'res
+        (lt_of_le_of_ne
+          (hct.symm ▸ hT₃.2.2.1 ▸ htmax _ T₃ (hT₃.1.elim (λ h, h.symm ▸ hrelTT'')
+            (λ h, h.trans (hrelT'T.trans hT₃.2.1))) _ hT₃.2.2.2 rfl)
+          (by rwa [ne.def, T'.to_partition.injective_colg.eq_iff])),
+have unique_row : ∀ i ≠ r, T.offset i 0 = 0 → T.to_partition.rowg i ≠ T'.to_partition.rowg i →
+    0 ≤ T.to_matrix i c,
+  from λ i hir hi0 hrow,
+    let ⟨T₃, c₃, hc₃, hrow₃, hrelT₃T, hrelTT₃⟩ :=
+      exists_mem_pivot_column_of_rowg_ne _ hrelTT' hrelT'T hrow in
+    have hrelT₃T₃ : rel obj T₃ T₃, from hrelT₃T.trans hrelTT₃,
+    nonneg_of_lt_find_pivot_row (by exact hcobj0)
+      (by rw [← hrow₃, ← restricted_eq_of_rel _ hrelT₃T];
+        exact colg_mem_restricted_of_rel_self _ hrelT₃T₃ hc₃) hc hr hi0
+      (lt_of_le_of_ne (by rw [hs, hct, ← hrow₃]; exact htmax _ _ hrelT₃T₃ _ hc₃ rfl)
+        (by simpa [T.to_partition.injective_rowg.eq_iff])),
+not_unique_row_and_unique_col obj hcobj0 hc'obj0 hrc0 hflat hs hrobj hfickle hobj
+  nonpos_of_colg_ne nonpos_of_colg_eq unique_row
 
+noncomputable instance fintype_rel (T : tableau m n) : fintype {T' | rel obj T' T} :=
+fintype.of_injective (λ T', T'.val.to_partition)
+  (λ T₁ T₂ h, subtype.eq $ tableau.ext
+    (by rw [flat_eq_of_rel _ T₁.2, flat_eq_of_rel _ T₂.2]) h
+    (by rw [restricted_eq_of_rel _ T₁.2, restricted_eq_of_rel _ T₂.2]))
 
-end
+noncomputable lemma fintype_flat_eq_and_restricted_eq (T : tableau m n) :
+  fintype {T' // rel obj T' T} :=
+fintype.of_injective (λ T', T'.val.to_partition)
+  (λ T₁ T₂ h, subtype.eq $ tableau.ext
+    (by rw [flat_eq_of_rel _ T₁.2, flat_eq_of_rel _ T₂.2]) h
+    (by rw [restricted_eq_of_rel _ T₁.2, restricted_eq_of_rel _ T₂.2]))
+
+lemma rel_wf (m n : ℕ) (obj : fin m): well_founded (@rel m n obj) :=
+subrelation.wf
+  (show subrelation (@rel m n obj) (measure (λ T, fintype.card {T' | rel obj T' T})),
+    from assume T₁ T₂ h,
+    set.card_lt_card (set.ssubset_iff_subset_not_subset.2 ⟨λ T' hT', hT'.trans h,
+      classical.not_forall.2 ⟨T₁, λ h', rel.irrefl _ (h' h)⟩⟩))
+  (measure_wf (λ T, fintype.card {T' | rel obj T' T}))
 
 end blands_rule
 
@@ -1141,39 +1192,42 @@ end simplex
 open simplex simplex.termination
 
 /-- The simplex algorithm -/
-def simplex (w : tableau m n → bool) : Π (T : tableau m n) (hT : feasible T) (obj : fin m),
+def simplex (w : tableau m n → bool) (obj : fin m) : Π (T : tableau m n) (hT : feasible T) ,
   tableau m n × termination
-| T hT obj := cond (w T)
-  (match find_pivot_column T obj, @feasible_of_mem_pivot_row_and_column _ _ _ obj hT with
-    | none,   hc := (T, maximised)
-    | some c, hc :=
-      match find_pivot_row T obj c, @hc _ rfl with
-      | none,   hr := (T, unbounded)
-      | some r, hr := have wf : tableau.sizeof m n (pivot T r c) < tableau.sizeof m n T, from sorry,
-        simplex (T.pivot r c) (hr rfl) obj
+| T := λ hT, cond (w T)
+  (match find_pivot_column T obj, @feasible_of_mem_pivot_row_and_column _ _ _ obj hT,
+      @rel.pivot m n obj _ hT with
+    | none,   hc, hrel := (T, maximised)
+    | some c, hc, hrel :=
+      match find_pivot_row T obj c, @hc _ rfl, (λ r, @hrel r c rfl) with
+      | none,   hr, hrel := (T, unbounded)
+      | some r, hr, hrel := have wf : rel obj (pivot T r c) T, from hrel _ rfl,
+        simplex (T.pivot r c) (hr rfl)
       end
     end)
   (T, while)
+using_well_founded {rel_tac := λ _ _, `[exact ⟨_, rel_wf m n obj⟩],
+  dec_tac := tactic.assumption}
 
 namespace simplex
 
 lemma simplex_pivot {w : tableau m n → bool} {T : tableau m n} (hT : feasible T)
   (hw : w T = tt) {obj : fin m} {r : fin m} {c : fin n}
   (hc : c ∈ find_pivot_column T obj) (hr : r ∈ find_pivot_row T obj c) :
-  (T.pivot r c).simplex w (feasible_of_mem_pivot_row_and_column hT hc hr) obj =
-  T.simplex w hT obj :=
+  (T.pivot r c).simplex w obj  (feasible_of_mem_pivot_row_and_column hT hc hr) =
+  T.simplex w obj hT  :=
 by conv_rhs { rw simplex };
   simp [hw, show _ = _, from hr, show _ = _, from hc, _match_1, _match_2]
 
-lemma simplex_spec_aux (w : tableau m n → bool) : Π (T : tableau m n) (hT : feasible T)
-  (obj : fin m),
-  ((T.simplex w hT obj).2 = while ∧ w (T.simplex w hT obj).1 = ff) ∨
-  ((T.simplex w hT obj).2 = maximised ∧ w (T.simplex w hT obj).1 = tt ∧
-    find_pivot_column (T.simplex w hT obj).1 obj = none) ∨
-  ((T.simplex w hT obj).2 = unbounded ∧ w (T.simplex w hT obj).1 = tt ∧
-    ∃ c, c ∈ find_pivot_column (T.simplex w hT obj).1 obj ∧
-    find_pivot_row (T.simplex w hT obj).1 obj c = none)
-| T hT obj :=
+lemma simplex_spec_aux (w : tableau m n → bool) (obj : fin m) :
+  Π (T : tableau m n) (hT : feasible T),
+  ((T.simplex w obj hT).2 = while ∧ w (T.simplex w obj hT).1 = ff) ∨
+  ((T.simplex w obj hT).2 = maximised ∧ w (T.simplex w obj hT).1 = tt ∧
+    find_pivot_column (T.simplex w obj hT).1 obj = none) ∨
+  ((T.simplex w obj hT).2 = unbounded ∧ w (T.simplex w obj hT).1 = tt ∧
+    ∃ c, c ∈ find_pivot_column (T.simplex w obj hT).1 obj ∧
+    find_pivot_row (T.simplex w obj hT).1 obj c = none)
+| T := λ hT,
   begin
     cases hw : w T,
     { rw simplex, simp [hw] },
@@ -1182,30 +1236,32 @@ lemma simplex_spec_aux (w : tableau m n → bool) : Π (T : tableau m n) (hT : f
       { cases hr : find_pivot_row T obj c with r,
         { rw simplex, simp [hr, hc, hw, _match_1, _match_2] },
         { rw [← simplex_pivot hT hw hc hr],
-          exact have wf : tableau.sizeof m n (pivot T r c) < tableau.sizeof m n T, from sorry,
-            simplex_spec_aux _ _ _ } } }
+          exact have wf : rel obj (T.pivot r c) T, from rel.pivot hT hc hr,
+            simplex_spec_aux _ _ } } }
   end
+using_well_founded {rel_tac := λ _ _, `[exact ⟨_, rel_wf m n obj⟩],
+  dec_tac := `[tauto]}
 
 lemma simplex_while_eq_ff {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
-  {obj : fin m} (hw : w T = ff) : T.simplex w hT obj = (T, while) :=
+  {obj : fin m} (hw : w T = ff) : T.simplex w obj hT = (T, while) :=
 by rw [simplex, hw]; refl
 
 lemma simplex_find_pivot_column_eq_none {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
   (hw : w T = tt) {obj : fin m} (hc : find_pivot_column T obj = none) :
-  T.simplex w hT obj = (T, maximised) :=
+  T.simplex w obj hT = (T, maximised) :=
 by rw simplex; simp [hc, hw, _match_1]
 
 lemma simplex_find_pivot_row_eq_none {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
   {obj : fin m} (hw : w T = tt) {c} (hc : c ∈ find_pivot_column T obj)
-  (hr : find_pivot_row T obj c = none) : T.simplex w hT obj = (T, unbounded) :=
+  (hr : find_pivot_row T obj c = none) : T.simplex w obj hT = (T, unbounded) :=
 by rw simplex; simp [hw, show _ = _, from hc, hr, _match_1, _match_2]
 
-lemma simplex_induction (P : tableau m n → Prop) (w : tableau m n → bool) : Π {T : tableau m n}
-  (hT : feasible T) (obj : fin m) (h0 : P T)
+lemma simplex_induction (P : tableau m n → Prop) (w : tableau m n → bool) (obj : fin m):
+  Π {T : tableau m n} (hT : feasible T)  (h0 : P T)
   (hpivot : ∀ {T' r c}, w T' = tt → c ∈ find_pivot_column T' obj → r ∈ find_pivot_row T' obj c
     → feasible T' → P T' → P (T'.pivot r c)),
-  P (simplex w T hT obj).1
-| T hT obj h0 hpivot :=
+  P (T.simplex w obj hT).1
+| T := λ hT h0 hpivot,
   begin
     cases hw : w T,
     { rwa [simplex_while_eq_ff hw] },
@@ -1214,79 +1270,81 @@ lemma simplex_induction (P : tableau m n → Prop) (w : tableau m n → bool) : 
       { cases hr : find_pivot_row T obj c with r,
         { rwa simplex_find_pivot_row_eq_none hw hc hr },
         { rw [← simplex_pivot _ hw hc hr],
-          exact have wf : tableau.sizeof m n (pivot T r c) < tableau.sizeof m n T, from sorry,
-            simplex_induction (feasible_of_mem_pivot_row_and_column hT hc hr) _
+          exact have wf : rel obj (pivot T r c) T, from rel.pivot hT hc hr,
+            simplex_induction (feasible_of_mem_pivot_row_and_column hT hc hr)
               (hpivot hw hc hr hT h0) @hpivot } } }
   end
+using_well_founded {rel_tac := λ _ _, `[exact ⟨_, rel_wf m n obj⟩],
+  dec_tac := `[tauto]}
 
 @[simp] lemma feasible_simplex {w : tableau m n → bool} {T : tableau m n}
-  {hT : feasible T} {obj : fin m} : feasible (T.simplex w hT obj).1 :=
-simplex_induction feasible _ hT _ hT
+  {hT : feasible T} {obj : fin m} : feasible (T.simplex w obj hT).1 :=
+simplex_induction feasible _ _ hT hT
   (λ _ _ _ _ hc hr _ hT', feasible_of_mem_pivot_row_and_column hT' hc hr)
 
 @[simp] lemma simplex_simplex {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
-  {obj : fin m} : (T.simplex w hT obj).1.simplex w feasible_simplex obj = T.simplex w hT obj :=
-simplex_induction (λ T', ∀ (hT' : feasible T'), T'.simplex w hT' obj = T.simplex w hT obj) w _ _
+  {obj : fin m} : (T.simplex w obj hT).1.simplex w obj feasible_simplex = T.simplex w obj hT :=
+simplex_induction (λ T', ∀ (hT' : feasible T'), T'.simplex w obj hT' = T.simplex w obj hT) w _ _
   (λ _, rfl) (λ T' r c hw hc hr hT' ih hpivot, by rw [simplex_pivot hT' hw hc hr, ih]) _
 
 /-- `simplex` does not move the row variable it is trying to maximise. -/
 @[simp] lemma rowg_simplex (T : tableau m n) (hT : feasible T) (w : tableau m n → bool)
-  (obj : fin m) : (T.simplex w hT obj).1.to_partition.rowg obj = T.to_partition.rowg obj :=
+  (obj : fin m) : (T.simplex w obj hT).1.to_partition.rowg obj = T.to_partition.rowg obj :=
 simplex_induction (λ T', T'.to_partition.rowg obj = T.to_partition.rowg obj) _ _ _ rfl
   (λ T' r c hw hc hr, by simp [rowg_swap_of_ne _ (find_pivot_row_spec hr).1])
 
 @[simp] lemma flat_simplex (T : tableau m n) (hT : feasible T) (w : tableau m n → bool)
-  (obj : fin m) : (T.simplex w hT obj).1.flat = T.flat :=
-simplex_induction (λ T', T'.flat = T.flat) w _ obj rfl
+  (obj : fin m) : (T.simplex w obj hT).1.flat = T.flat :=
+simplex_induction (λ T', T'.flat = T.flat) w obj _ rfl
   (λ T' r c hw hc hr hT' ih,
     have T'.to_matrix r c ≠ 0,
       from λ h, by simpa [h, lt_irrefl] using find_pivot_row_spec hr,
     by rw [flat_pivot this, ih])
 
 @[simp] lemma restricted_simplex (T : tableau m n) (hT : feasible T) (w : tableau m n → bool)
-  (obj : fin m) : (T.simplex w hT obj).1.restricted = T.restricted :=
+  (obj : fin m) : (T.simplex w obj hT).1.restricted = T.restricted :=
 simplex_induction (λ T', T'.restricted = T.restricted) _ _ _ rfl (by simp { contextual := tt })
 
 @[simp] lemma sol_set_simplex (T : tableau m n) (hT : feasible T) (w : tableau m n → bool)
-  (obj : fin m) : (T.simplex w hT obj).1.sol_set = T.sol_set :=
+  (obj : fin m) : (T.simplex w obj hT).1.sol_set = T.sol_set :=
 by simp [sol_set]
 
 @[simp] lemma of_col_simplex_zero_mem_sol_set {w : tableau m n → bool} {T : tableau m n}
-  {hT : feasible T} {obj : fin m} : (T.simplex w hT obj).1.of_col 0 ∈ sol_set T :=
+  {hT : feasible T} {obj : fin m} : (T.simplex w obj hT).1.of_col 0 ∈ sol_set T :=
 by rw [← sol_set_simplex, of_col_zero_mem_sol_set_iff]; exact feasible_simplex
 
 @[simp] lemma of_col_simplex_rowg {w : tableau m n → bool} {T : tableau m n}
   {hT : feasible T} {obj : fin m} (x : cvec n) :
-  (T.simplex w hT obj).1.of_col x (T.to_partition.rowg obj) =
-  ((T.simplex w hT obj).1.to_matrix ⬝ x + (T.simplex w hT obj).1.offset) obj :=
-by rw [← of_col_rowg (T.simplex w hT obj).1 x obj, rowg_simplex]
+  (T.simplex w obj hT).1.of_col x (T.to_partition.rowg obj) =
+  ((T.simplex w obj hT).1.to_matrix ⬝ x + (T.simplex w obj hT).1.offset) obj :=
+by rw [← of_col_rowg (T.simplex w obj hT).1 x obj, rowg_simplex]
 
 @[simp] lemma is_unbounded_above_simplex {T : tableau m n} {hT : feasible T} {w : tableau m n → bool}
-  {obj : fin m} {v : fin (m + n)} : is_unbounded_above (T.simplex w hT obj).1 v ↔
+  {obj : fin m} {v : fin (m + n)} : is_unbounded_above (T.simplex w obj hT).1 v ↔
   is_unbounded_above T v := by simp [is_unbounded_above]
 
 @[simp] lemma is_maximised_simplex {T : tableau m n} {hT : feasible T} {w : tableau m n → bool}
-  {obj : fin m} {x : cvec (m + n)} {v : fin (m + n)} : is_maximised (T.simplex w hT obj).1 x v ↔
+  {obj : fin m} {x : cvec (m + n)} {v : fin (m + n)} : is_maximised (T.simplex w obj hT).1 x v ↔
   is_maximised T x v := by simp [is_maximised]
 
 lemma termination_eq_while_iff {T : tableau m n} {hT : feasible T} {w : tableau m n → bool}
-  {obj : fin m} : (T.simplex w hT obj).2 = while ↔ w (T.simplex w hT obj).1 = ff :=
-by have := simplex_spec_aux w T hT obj; finish
+  {obj : fin m} : (T.simplex w obj hT).2 = while ↔ w (T.simplex w obj hT).1 = ff :=
+by have := simplex_spec_aux w obj T hT; finish
 
 lemma termination_eq_maximised_iff_find_pivot_column_eq_none {T : tableau m n}
-  {hT : feasible T} {w : tableau m n → bool} {obj : fin m} : (T.simplex w hT obj).2 = maximised ↔
-  w (T.simplex w hT obj).1 = tt ∧ find_pivot_column (T.simplex w hT obj).1 obj = none :=
-by have := simplex_spec_aux w T hT obj; finish
+  {hT : feasible T} {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = maximised ↔
+  w (T.simplex w obj hT).1 = tt ∧ find_pivot_column (T.simplex w obj hT).1 obj = none :=
+by have := simplex_spec_aux w obj T hT; finish
 
 lemma termination_eq_unbounded_iff_find_pivot_row_eq_none {T : tableau m n} {hT : feasible T}
-  {w : tableau m n → bool} {obj : fin m} : (T.simplex w hT obj).2 = unbounded ↔
-  w (T.simplex w hT obj).1 = tt ∧ ∃ c, c ∈ find_pivot_column (T.simplex w hT obj).1 obj ∧
-  find_pivot_row (T.simplex w hT obj).1 obj c = none :=
-by have := simplex_spec_aux w T hT obj; finish
+  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = unbounded ↔
+  w (T.simplex w obj hT).1 = tt ∧ ∃ c, c ∈ find_pivot_column (T.simplex w obj hT).1 obj ∧
+  find_pivot_row (T.simplex w obj hT).1 obj c = none :=
+by have := simplex_spec_aux w obj T hT; finish
 
 lemma termination_eq_unbounded_iff_aux {T : tableau m n} {hT : feasible T}
-  {w : tableau m n → bool} {obj : fin m} : (T.simplex w hT obj).2 = unbounded →
-  w (T.simplex w hT obj).1 = tt ∧
+  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = unbounded →
+  w (T.simplex w obj hT).1 = tt ∧
   is_unbounded_above T (T.to_partition.rowg obj) :=
 begin
   rw termination_eq_unbounded_iff_find_pivot_row_eq_none,
@@ -1295,15 +1353,15 @@ begin
 end
 
 lemma termination_eq_maximised_iff {T : tableau m n} {hT : feasible T}
-  {w : tableau m n → bool} {obj : fin m} : (T.simplex w hT obj).2 = maximised ↔
-  w (T.simplex w hT obj).1 = tt ∧
-  is_maximised T ((T.simplex w hT obj).1.of_col 0) (T.to_partition.rowg obj) :=
+  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = maximised ↔
+  w (T.simplex w obj hT).1 = tt ∧
+  is_maximised T ((T.simplex w obj hT).1.of_col 0) (T.to_partition.rowg obj) :=
 begin
   rw [termination_eq_maximised_iff_find_pivot_column_eq_none],
   split,
   { rintros ⟨_, hc⟩,
     simpa * using find_pivot_column_eq_none feasible_simplex hc },
-  { cases ht : (T.simplex w hT obj).2,
+  { cases ht : (T.simplex w obj hT).2,
     { simp [*, termination_eq_while_iff] at * },
     { cases termination_eq_unbounded_iff_aux ht,
       simp [*, not_maximised_of_unbounded_above right] },
@@ -1311,13 +1369,13 @@ begin
 end
 
 lemma termination_eq_unbounded_iff {T : tableau m n} {hT : feasible T}
-  {w : tableau m n → bool} {obj : fin m} : (T.simplex w hT obj).2 = unbounded ↔
-  w (T.simplex w hT obj).1 = tt ∧ is_unbounded_above T (T.to_partition.rowg obj) :=
+  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = unbounded ↔
+  w (T.simplex w obj hT).1 = tt ∧ is_unbounded_above T (T.to_partition.rowg obj) :=
 ⟨termination_eq_unbounded_iff_aux,
   begin
-    have := @not_maximised_of_unbounded_above m n (T.simplex w hT obj).1 (T.to_partition.rowg obj)
-      ((T.simplex w hT obj).1.of_col 0),
-    cases ht : (T.simplex w hT obj).2;
+    have := @not_maximised_of_unbounded_above m n (T.simplex w obj hT).1 (T.to_partition.rowg obj)
+      ((T.simplex w obj hT).1.of_col 0),
+    cases ht : (T.simplex w obj hT).2;
     simp [termination_eq_maximised_iff, termination_eq_while_iff, *] at *
   end⟩
 
@@ -1356,8 +1414,8 @@ lemma add_row_restricted (T : tableau m n) (fac : rvec (m + n)) (const : ℚ) :
   (T.add_row fac const).restricted = T.restricted.image fin.castp :=
 by simp [add_row, map_eq_image]
 
-@[simp] lemma fin.cast_lt_cast_succ {n : ℕ} (a : fin n) (h : a.1 < n) :
-  a.cast_succ.cast_lt h = a := by cases a; refl
+-- @[simp] lemma fin.cast_lt_cast_succ {n : ℕ} (a : fin n) (h : a.1 < n) :
+--   a.cast_succ.cast_lt h = a := by cases a; refl
 
 lemma minor_mem_flat_of_mem_add_row_flat {T : tableau m n} {fac : rvec (m + n)} {const : ℚ}
   {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac const).flat → minor x fin.castp id ∈ T.flat :=
@@ -1453,7 +1511,7 @@ open tableau.simplex tableau.simplex.termination
 section sign_of_max_row
 
 def sign_of_max_row (T : tableau m n) (hT : feasible T) (obj : fin m) : ℤ :=
-let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) hT obj in
+let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) obj hT in
 match T'.2 with
 | while     := 1
 | unbounded := 1
@@ -1464,7 +1522,7 @@ lemma sign_of_max_row_eq_zero {T : tableau m n} {hT : feasible T} {obj : fin m} 
   sign_of_max_row T hT obj = 0 ↔
     ∃ x : cvec (m + n), x ∈ sol_set T ∧ (x (T.to_partition.rowg obj) 0 = 0) ∧ is_maximised T x
       (T.to_partition.rowg obj) :=
-let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) hT obj in
+let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) obj hT in
 begin
   cases h : T'.2,
   { simp only [sign_of_max_row, *, termination_eq_while_iff, is_maximised, classical.not_forall,
@@ -1494,7 +1552,7 @@ end
 lemma sign_of_max_row_eq_one {T : tableau m n} {hT : feasible T} {obj : fin m} :
   sign_of_max_row T hT obj = 1 ↔
     ∃ x : cvec (m + n), x ∈ sol_set T ∧ 0 < x (T.to_partition.rowg obj) 0 :=
-let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) hT obj in
+let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) obj hT in
 begin
   cases h : T'.2,
   { simp only [sign_of_max_row, *, termination_eq_while_iff, eq_self_iff_true, true_iff,
@@ -1516,7 +1574,7 @@ end
 lemma sign_of_max_row_eq_neg_one {T : tableau m n} {hT : feasible T} {obj : fin m} :
   sign_of_max_row T hT obj = -1 ↔
     ∀ x : cvec (m + n), x ∈ sol_set T → x (T.to_partition.rowg obj) 0 < 0 :=
-let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) hT obj in
+let T' := T.simplex (λ T', T'.offset obj 0 ≤ 0) obj hT in
 begin
   cases h : T'.2,
   { simp only [sign_of_max_row, *, termination_eq_while_iff, false_iff, classical.not_forall,
@@ -1610,7 +1668,7 @@ instance {m n} : has_repr (matrix (fin m) (fin n) ℚ) := has_repr_fin_fun
 def T : tableau 25 10 :=
 { to_matrix := list.to_matrix 25 10
     [[0, 0, 0, 0, 1, 0, 1, 0, 1, -1], [-1, 1, 0, -1, 1, 0, 1, -1, 0, 0], [0, -1, 1, 1, 1, 0, 0, 0, 1, 0], [1, 1, 1, 0, 1, -1, 1, -1, 1, -1], [0, 1, 1, -1, -1, 1, -1, 1, -1, 1], [0, -1, 1, -1, 1, 1, 0, 1, 0, -1], [-1, 0, 0, -1, -1, 1, 1, 0, -1, -1], [-1, 0, 0, -1, 0, -1, 0, 0, -1, 1], [-1, 0, 0, 1, -1, 1, -1, -1, 1, 0], [1, 0, 0, 0, 1, -1, 1, 0, -1, 1], [0, -1, 1, 0, 0, 1, 0, -1, 0, 0], [-1, 1, -1, 1, 1, 0, 1, 0, 1, 0], [1, 1, 1, 1, -1, 0, 0, 0, -1, 0], [-1, -1, 0, 0, 1, 0, 1, 1, -1, 0], [0, 0, -1, 1, -1, 0, 0, 1, 0, -1], [-1, 0, -1, 1, 1, 1, 0, 0, 0, 0], [1, 0, -1, 1, 0, -1, -1, 1, -1, 1], [-1, 1, -1, 1, -1, -1, -1, 1, -1, 1], [-1, 0, 0, 0, 1, -1, 1, -1, -1, 1], [-1, -1, -1, 1, 0, 1, -1, 1, 0, 0], [-1, 0, 0, 0, -1, -1, 1, -1, 0, 1], [-1, 0, 0, -1, 1, 1, 1, -1, 1, 0], [0, -1, 0, 0, 0, -1, 0, 1, 0, -1], [1, -1, 1, 0, 0, 1, 0, 1, 0, -1], [0, -1, -1, 0, 0, 0, -1, 0, 1, 0]],
-  offset := λ i _, if i.1 < 5 then 0 else 1,
+  offset := λ i _, if i.1 < 8 then 0 else 1,
   to_partition := default _,
   restricted := univ }
 
@@ -1624,7 +1682,7 @@ def T : tableau 25 10 :=
 
 --#reduce let s := T.simplex (λ _, tt) dec_trivial 0 in s.2
 
-#eval let s := T.simplex (λ _, tt) dec_trivial 0 in
+#eval let s := T.simplex (λ _, tt) 0 dec_trivial in
 (s.2, s.1.to_partition.row_indices.1, s.1.offset)
 
 -- (s.2, s.1.offset 0 0, s.1.to_partition.row_indices.1)
