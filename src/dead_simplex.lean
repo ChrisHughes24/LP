@@ -1,4 +1,4 @@
-import tableau order.lexicographic
+import dead_tableau order.lexicographic
 
 open matrix fintype finset function pequiv partition
 variables {m n : ℕ}
@@ -15,8 +15,9 @@ decidable_linear_order.lift T.to_partition.colg (injective_colg _) (by apply_ins
 
 def find_pivot_column (T : tableau m n) (obj : fin m) : option (fin n) :=
 option.cases_on
-  (fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted))
-  (((list.fin_range n).filter (λ c : fin n, 0 < T.to_matrix obj c)).argmin
+  (fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted
+    ∧ c ∉ T.dead))
+  (((list.fin_range n).filter (λ c : fin n, 0 < T.to_matrix obj c ∧ c ∉ T.dead)).argmin
     T.to_partition.colg)
   some
 
@@ -46,26 +47,28 @@ let l := (list.fin_range m).filter (λ r : fin m, obj ≠ r ∧ T.to_partition.r
 @list.minimum _ (pivot_row_linear_order T c) l
 
 lemma find_pivot_column_spec {T : tableau m n} {obj : fin m} {c : fin n} :
-  c ∈ find_pivot_column T obj → (T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
-  ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted) :=
+  c ∈ find_pivot_column T obj → ((T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
+  ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted)) ∧ c ∉ T.dead :=
 begin
   simp [find_pivot_column],
-  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted),
-  { finish [h, fin.find_eq_some_iff, fin.find_eq_none_iff, lt_irrefl (0 : ℚ),
-      list.argmin_eq_some_iff] },
+  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted
+    ∧ c ∉ T.dead),
+  { finish [h, fin.find_eq_some_iff, fin.find_eq_none_iff, lt_irrefl, list.argmin_eq_some_iff] },
   { finish [fin.find_eq_some_iff] }
 end
 
 lemma nonpos_of_lt_find_pivot_column {T : tableau m n} {obj : fin m} {c j : fin n}
   (hc : c ∈ find_pivot_column T obj) (hcres : T.to_partition.colg c ∈ T.restricted)
-  (hjc : T.to_partition.colg j < T.to_partition.colg c) :
+  (hdead : j ∉ T.dead) (hjc : T.to_partition.colg j < T.to_partition.colg c) :
   T.to_matrix obj j ≤ 0 :=
 begin
   rw [find_pivot_column] at hc,
-  cases h : fin.find (λ c, T.to_matrix obj c ≠ 0 ∧ colg (T.to_partition) c ∉ T.restricted),
+  cases h : fin.find (λ c, T.to_matrix obj c ≠ 0 ∧ colg (T.to_partition) c ∉ T.restricted
+    ∧ c ∉ T.dead),
   { rw h at hc,
     refine le_of_not_lt (λ hj0, _),
-    exact not_le_of_gt hjc ((list.mem_argmin_iff.1 hc).2.1 j (list.mem_filter.2 (by simp [hj0]))) },
+    exact not_le_of_gt hjc ((list.mem_argmin_iff.1 hc).2.1 j
+      (list.mem_filter.2 (by simp [hj0, hdead]))) },
   { rw h at hc,
     simp [*, fin.find_eq_some_iff] at * }
 end
@@ -76,8 +79,12 @@ is_optimal_of_col_zero hT
 begin
   revert h,
   simp [find_pivot_column],
-  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted),
-  { finish [fin.find_eq_none_iff, list.argmin_eq_some_iff, list.filter_eq_nil] },
+  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted
+    ∧ c ∉ T.dead),
+  { simp only [list.filter_eq_nil, forall_prop_of_true, list.argmin_eq_none,
+      list.mem_fin_range, not_and, not_not, fin.find_eq_none_iff] at *,
+    assume hj j hdead,
+    exact ⟨le_of_not_gt (λ h0, hdead (hj j h0)), by finish⟩ },
   { simp [h] }
 end
 
@@ -135,13 +142,13 @@ lemma find_pivot_row_eq_none {T : tableau m n} {obj : fin m} {c : fin n} (hT : T
 have hrow : ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted →
     0 ≤ T.to_matrix obj c / T.to_matrix r c,
   from find_pivot_row_eq_none_aux hrow hs,
-have hc : (T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
-    ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted),
+have hc : ((T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
+    ∨ (0 < T.to_matrix obj c ∧ T.to_partition.colg c ∈ T.restricted)) ∧ c ∉ T.dead,
   from find_pivot_column_spec hs,
 have hToc : T.to_matrix obj c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hc,
 (lt_or_gt_of_ne hToc).elim
   (λ hToc : T.to_matrix obj c < 0, is_unbounded_above_rowg_of_nonpos hT c
-    (hc.elim and.right (λ h, (not_lt_of_gt hToc h.1).elim))
+    (hc.1.elim and.right (λ h, (not_lt_of_gt hToc h.1).elim)) hc.2
     (λ i hi, classical.by_cases
       (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
       (λ hoi : obj ≠ i, inv_nonpos.1 $ nonpos_of_mul_nonneg_right (hrow _ hoi hi) hToc))
@@ -150,7 +157,7 @@ have hToc : T.to_matrix obj c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hc
     (λ i hi, classical.by_cases
       (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
       (λ hoi : obj ≠ i, inv_nonneg.1 $ nonneg_of_mul_nonneg_left (hrow _ hoi hi) hToc))
-    hToc)
+    hc.2 hToc)
 
 def feasible_of_mem_pivot_row_and_column {T : tableau m n} {obj : fin m} (hT : T.feasible) {c}
   (hc : c ∈ find_pivot_column T obj) {r} (hr : r ∈ find_pivot_row T obj c) :
@@ -463,14 +470,15 @@ let ⟨T', c', hT', hrelTT', hrowcol, _, hr'⟩ := (rowg_eq_or_exists_mem_pivot_
 (restricted_eq_of_rel _ hrelTT').symm ▸ by convert (find_pivot_row_spec hr').2.1; simp [hrowcol]
 
 lemma eq_zero_of_not_mem_restricted_of_rel_self {T : tableau m n} (hrelTT : rel obj T T)
-  {j} (hjres : T.to_partition.colg j ∉ T.restricted) : T.to_matrix obj j = 0 :=
+  {j} (hjres : T.to_partition.colg j ∉ T.restricted) (hdead : j ∉ T.dead) : T.to_matrix obj j = 0 :=
 let ⟨r, c, hc, hr⟩ := exists_mem_pivot_row_column_of_rel obj hrelTT in
 have hcres : T.to_partition.colg c ∈ T.restricted,
   from colg_mem_restricted_of_rel_self obj hrelTT hc,
 by_contradiction $ λ h0,
 begin
   simp [find_pivot_column] at hc,
-  cases h : fin.find (λ c, T.to_matrix obj c ≠ 0 ∧ colg (T.to_partition) c ∉ T.restricted),
+  cases h : fin.find (λ c, T.to_matrix obj c ≠ 0 ∧ colg (T.to_partition) c ∉ T.restricted
+    ∧ c ∉ T.dead),
   { simp [*, fin.find_eq_none_iff] at * },
   { rw h at hc, clear_aux_decl,
     have := (fin.find_eq_some_iff.1 h).1,

@@ -1,60 +1,162 @@
-import data.matrix.pequiv data.rat.basic
+import data.matrix.pequiv data.rat.basic data.vector2
 
 variables {m n : ℕ}
 
-/-- The type of ordered partitions of `m + n` elements into a
+/-- The type of ordered partitions of `m + n` elements into vectors of
   `m` row variables and `n` column variables  -/
-structure partition (m n : ℕ) : Type :=
-( rowp : fin m ≃. fin (m + n) )
-( colp : fin n ≃. fin (m + n) )
-( rowp_trans_rowp_symm : rowp.trans rowp.symm = pequiv.refl (fin m) )
-( colp_trans_colp_symm : colp.trans colp.symm = pequiv.refl (fin n) )
-( rowp_trans_colp_symm : rowp.trans colp.symm = ⊥ )
+@[derive decidable_eq] structure partition (m n : ℕ) : Type :=
+(row_indices : vector (fin (m + n)) m)
+(col_indices : vector (fin (m + n)) n)
+(mem_row_indices_or_col_indices :
+  ∀ v : fin (m + n), v ∈ row_indices.to_list ∨ v ∈ col_indices.to_list)
+
+open pequiv function matrix finset fintype
 
 namespace partition
-open pequiv function matrix finset fintype
 
 local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := transpose
 
-attribute [simp] rowp_trans_rowp_symm colp_trans_colp_symm rowp_trans_colp_symm
+variable (B : partition m n)
 
-lemma fin.coe_eq_val (a : fin n) : (a : ℕ) = a.val := rfl
+def fintype_aux : partition m n ≃ { x : vector (fin (m + n)) m × vector (fin (m + n)) n //
+  ∀ v : fin (m + n), v ∈ x.1.to_list ∨ v ∈ x.2.to_list } :=
+{ to_fun := λ ⟨r, c, h⟩, ⟨⟨r, c⟩, h⟩,
+  inv_fun := λ ⟨⟨r, c⟩, h⟩, ⟨r, c, h⟩,
+  left_inv := λ ⟨r, c, h⟩, rfl,
+  right_inv := λ ⟨⟨r, c⟩, h⟩, rfl }
+
+instance : fintype (partition m n) := fintype.of_equiv _ fintype_aux.symm
+
+def rowg : fin m → fin (m + n) := B.row_indices.nth
+def colg : fin n → fin (m + n) := B.col_indices.nth
+
+lemma mem_row_indices_iff_exists {v : fin (m + n)} :
+  v ∈ B.row_indices.to_list ↔ ∃ i, v = B.rowg i :=
+by simp only [vector.mem_iff_nth, eq_comm, rowg]
+
+lemma mem_col_indices_iff_exists {v : fin (m + n)} :
+  v ∈ B.col_indices.to_list ↔ ∃ j, v = B.colg j :=
+by simp only [vector.mem_iff_nth, eq_comm, colg]
+
+lemma eq_rowg_or_colg (v : fin (m + n)) : (∃ i, v = B.rowg i) ∨ (∃ j, v = B.colg j) :=
+by rw [← mem_row_indices_iff_exists, ← mem_col_indices_iff_exists];
+  exact B.mem_row_indices_or_col_indices _
+
+lemma row_indices_append_col_indices_nodup : (B.row_indices.append B.col_indices).to_list.nodup :=
+vector.nodup_iff_nth_inj.2 $ fintype.injective_iff_surjective.2 $ λ v,
+  (B.mem_row_indices_or_col_indices v).elim
+    (by rw [← vector.mem_iff_nth]; simp {contextual := tt})
+    (by rw [← vector.mem_iff_nth]; simp {contextual := tt})
+
+lemma row_indices_nodup : B.row_indices.to_list.nodup :=
+begin
+  have := B.row_indices_append_col_indices_nodup,
+  simp [list.nodup_append] at this, tauto
+end
+
+lemma col_indices_nodup : B.col_indices.to_list.nodup :=
+begin
+  have := B.row_indices_append_col_indices_nodup,
+  simp [list.nodup_append] at this, tauto
+end
+
+@[simp] lemma rowg_ne_colg (i j) : B.rowg i ≠ B.colg j :=
+λ h, begin
+  rw [rowg, colg] at h,
+  have := B.row_indices_append_col_indices_nodup,
+  rw [vector.to_list_append (B.row_indices) (B.col_indices), list.nodup_append,
+    list.disjoint_right] at this,
+  exact this.2.2 (by rw h; exact vector.nth_mem _ _) (vector.nth_mem i B.row_indices)
+end
+
+@[simp] lemma colg_ne_rowg (i j) : B.colg j ≠ B.rowg i := ne.symm $ rowg_ne_colg _ _ _
+
+lemma injective_rowg : injective B.rowg :=
+vector.nodup_iff_nth_inj.1 B.row_indices_nodup
+
+lemma injective_colg : injective B.colg :=
+vector.nodup_iff_nth_inj.1 B.col_indices_nodup
+
+def rowp : fin m ≃. fin (m + n) :=
+{ to_fun := λ i, some (B.rowg i),
+  inv_fun := λ v, fin.find (λ i, B.rowg i = v),
+  inv := λ i v, begin
+    cases h : fin.find (λ i, B.rowg i = v),
+    { simp [fin.find_eq_none_iff, *] at * },
+    { rw [fin.find_eq_some_iff] at h,
+      cases h with h _,
+      subst h,
+      simp [B.injective_rowg.eq_iff, eq_comm] }
+  end }
+
+def colp : fin n ≃. fin (m + n) :=
+{ to_fun := λ j, some (B.colg j),
+  inv_fun := λ v, fin.find (λ j, B.colg j = v),
+  inv := λ j v, begin
+    cases h : fin.find (λ j, B.colg j = v),
+    { simp [fin.find_eq_none_iff, *] at * },
+    { rw [fin.find_eq_some_iff] at h,
+      cases h with h _,
+      subst h,
+      simp [B.injective_colg.eq_iff, eq_comm] }
+  end }
+
+@[simp] lemma rowp_trans_rowp_symm : B.rowp.trans B.rowp.symm = pequiv.refl _ :=
+trans_symm_eq_iff_forall_is_some.2 (λ _, rfl)
+
+@[simp] lemma colp_trans_colp_symm : B.colp.trans B.colp.symm = pequiv.refl _ :=
+trans_symm_eq_iff_forall_is_some.2 (λ _, rfl)
+
+@[simp] lemma rowg_mem (B : partition m n) (r : fin m) : (B.rowg r) ∈ B.rowp r := eq.refl _
+
+lemma rowp_eq_some_rowg (B : partition m n) (r : fin m) : B.rowp r = some (B.rowg r) := rfl
+
+@[simp] lemma colg_mem (B : partition m n) (s : fin n) : (B.colg s) ∈ B.colp s := eq.refl _
+
+lemma colp_eq_some_colg (B : partition m n) (s : fin n) : B.colp s = some (B.colg s) := rfl
+
+@[simp] lemma rowp_rowg (B : partition m n) (r : fin m) : B.rowp.symm (B.rowg r) = some r :=
+B.rowp.mem_iff_mem.2 (rowg_mem _ _)
+
+@[simp] lemma colp_colg (B : partition m n) (s : fin n) : B.colp.symm (B.colg s) = some s :=
+B.colp.mem_iff_mem.2 (colg_mem _ _)
+
+@[simp] lemma rowp_trans_colp_symm : B.rowp.trans B.colp.symm = ⊥ :=
+begin
+  ext,
+  simp, dsimp [pequiv.trans, pequiv.symm],
+  simp [B.rowp_eq_some_rowg, colp, fin.find_eq_some_iff]
+end
+
+@[simp] lemma colg_get_colp_symm (v : fin (m + n)) (h : (B.colp.symm v).is_some) :
+  B.colg (option.get h) = v :=
+let ⟨j, hj⟩ := option.is_some_iff_exists.1 h in
+have hj' : j ∈ B.colp.symm (B.colg (option.get h)), by simpa,
+B.colp.symm.inj hj' hj
+
+@[simp] lemma rowg_get_rowp_symm (v : fin (m + n)) (h : (B.rowp.symm v).is_some) :
+  B.rowg (option.get h) = v :=
+let ⟨i, hi⟩ := option.is_some_iff_exists.1 h in
+have hi' : i ∈ B.rowp.symm (B.rowg (option.get h)), by simpa,
+B.rowp.symm.inj hi' hi
 
 def default : partition m n :=
-{ rowp :=
-  { to_fun := some ∘ fin.cast_le (le_add_right (le_refl _)),
-    inv_fun := λ j, if hm : j.1 < m then some ⟨j, hm⟩ else none,
-    inv := begin
-      rintros ⟨i, _⟩ ⟨j, _⟩, split_ifs;
-      simp [fin.coe_eq_val, fin.cast_le, fin.cast_lt, eq_comm, -not_lt];
-      intro; simp [*, -not_lt] at *,
-    end },
-  colp := { to_fun := λ i, some ⟨m + i, add_lt_add_of_le_of_lt (le_refl _) i.2⟩,
-    inv_fun := λ j, if hm : m ≤ j.1
-      then some ⟨j - m, (nat.sub_lt_left_iff_lt_add hm).2 j.2⟩ else none,
-    inv := begin
-      rintros ⟨i, _⟩ ⟨j, _⟩,
-      simp [pequiv.trans, pequiv.symm, fin.cast_le, fin.cast_lt, fin.coe_eq_val, fin.ext_iff],
-      split_ifs,
-      { simp [fin.ext_iff, nat.sub_eq_iff_eq_add h, @eq_comm _ j] at * },
-      { simp, intro, subst j, simp [nat.le_add_left, *] at * }
-    end },
-  rowp_trans_rowp_symm := trans_symm_eq_iff_forall_is_some.2 (λ _, rfl),
-  colp_trans_colp_symm := trans_symm_eq_iff_forall_is_some.2 (λ _, rfl),
-  rowp_trans_colp_symm := pequiv.ext begin
-    rintro ⟨i, hi⟩,
-    dsimp [pequiv.trans, pequiv.symm, fin.cast_le, fin.cast_lt],
-    rw [dif_neg (not_le_of_gt hi)]
-  end }
+{ row_indices := ⟨(list.fin_range m).map (fin.cast_add _), by simp⟩,
+  col_indices := ⟨(list.fin_range n).map
+    (λ i, ⟨m + i.1, add_lt_add_of_le_of_lt (le_refl _) i.2⟩), by simp⟩,
+  mem_row_indices_or_col_indices := λ v,
+    if h : v.1 < m
+    then or.inl (list.mem_map.2 ⟨⟨v.1, h⟩, list.mem_fin_range _, fin.eta _ _⟩)
+    else have v.val - m < n, from (nat.sub_lt_left_iff_lt_add (le_of_not_gt h)).2 v.2,
+      or.inr (list.mem_map.2 ⟨⟨v.1 - m, this⟩, list.mem_fin_range _,
+        by simp [nat.add_sub_cancel' (le_of_not_gt h)]⟩) }
 
 instance : inhabited (partition m n) := ⟨default⟩
 
-lemma is_some_rowp (B : partition m n) : ∀ (i : fin m), (B.rowp i).is_some :=
-by rw [← trans_symm_eq_iff_forall_is_some, rowp_trans_rowp_symm]
+lemma is_some_rowp (B : partition m n) : ∀ (i : fin m), (B.rowp i).is_some := λ _, rfl
 
-lemma is_some_colp (B : partition m n) : ∀ (k : fin n), (B.colp k).is_some :=
-by rw [← trans_symm_eq_iff_forall_is_some, colp_trans_colp_symm]
+lemma is_some_colp (B : partition m n) : ∀ (k : fin n), (B.colp k).is_some := λ _, rfl
 
 lemma injective_rowp (B : partition m n) : injective B.rowp :=
 injective_of_forall_is_some (is_some_rowp B)
@@ -62,36 +164,46 @@ injective_of_forall_is_some (is_some_rowp B)
 lemma injective_colp (B : partition m n) : injective B.colp :=
 injective_of_forall_is_some (is_some_colp B)
 
-/-- given a row index, `rowg` returns the variable in that position -/
-def rowg (B : partition m n) (r : fin m) : fin (m + n) :=
-option.get (B.is_some_rowp r)
+@[elab_as_eliminator] def row_col_cases_on {C : fin (m + n) → Sort*} (B : partition m n)
+  (v : fin (m + n)) (row : fin m → C v) (col : fin n → C v) : C v :=
+begin
+  cases h : B.rowp.symm v with r,
+  { exact col (option.get (show (B.colp.symm v).is_some,
+    from (B.eq_rowg_or_colg v).elim (λ ⟨r, hr⟩, absurd h (hr.symm ▸ by simp))
+      (λ ⟨c, hc⟩, hc.symm ▸ by simp))) },
+  { exact row r }
+end
 
-/-- given a column index, `colg` returns the variable in that position -/
-def colg (B : partition m n) (s : fin n) : fin (m + n) :=
-option.get (B.is_some_colp s)
-
-lemma injective_rowg (B : partition m n) : injective B.rowg :=
-λ x y h, by rw [rowg, rowg, ← option.some_inj, option.some_get, option.some_get] at h;
-  exact injective_rowp B h
-
-lemma injective_colg (B : partition m n) : injective B.colg :=
-λ x y h, by rw [colg, colg, ← option.some_inj, option.some_get, option.some_get] at h;
-  exact injective_colp B h
+@[simp] lemma row_col_cases_on_rowg {C : fin (m + n) → Sort*} (B : partition m n)
+  (r : fin m) (row : fin m → C (B.rowg r)) (col : fin n → C (B.rowg r)) :
+  (row_col_cases_on B (B.rowg r) row col : C (B.rowg r)) = row r :=
+by simp [row_col_cases_on]
 
 local infix ` ♣ `: 70 := pequiv.trans
 
 def swap (B : partition m n) (r : fin m) (s : fin n) : partition m n :=
-{ rowp := B.rowp.trans (equiv.swap (B.rowg r) (B.colg s)).to_pequiv,
-  colp := B.colp.trans (equiv.swap (B.rowg r) (B.colg s)).to_pequiv,
-  rowp_trans_rowp_symm := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.rowp,
-      ← equiv.to_pequiv_symm,  ← equiv.to_pequiv_trans];
-    simp,
-  colp_trans_colp_symm := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.colp,
-      ← equiv.to_pequiv_symm, ← equiv.to_pequiv_trans];
-    simp,
-  rowp_trans_colp_symm := by rw [symm_trans_rev, ← trans_assoc, trans_assoc B.rowp,
-      ← equiv.to_pequiv_symm, ← equiv.to_pequiv_trans];
-    simp }
+{ row_indices := B.row_indices.update_nth r (B.col_indices.nth s),
+  col_indices := B.col_indices.update_nth s (B.row_indices.nth r),
+  mem_row_indices_or_col_indices := λ v,
+    (B.mem_row_indices_or_col_indices v).elim
+      (λ h, begin
+        revert h,
+        simp only [vector.mem_iff_nth, exists_imp_distrib, vector.nth_update_nth_eq_if],
+        intros i hi,
+        subst hi,
+        by_cases r = i,
+        { right, use s, simp [h] },
+        { left, use i, simp [h] }
+      end)
+      (λ h, begin
+        revert h,
+        simp only [vector.mem_iff_nth, exists_imp_distrib, vector.nth_update_nth_eq_if],
+        intros j hj,
+        subst hj,
+        by_cases s = j,
+        { left, use r, simp [h] },
+        { right, use j, simp [h] }
+      end)}
 
 lemma not_is_some_colp_of_is_some_rowp (B : partition m n) (j : fin (m + n)) :
   (B.rowp.symm j).is_some → (B.colp.symm j).is_some → false :=
@@ -104,24 +216,6 @@ begin
   rw [pequiv.eq_some_iff] at hi,
   exact (this j k).resolve_left (not_not.2 hi) hk
 end
-
-@[simp] lemma rowg_mem (B : partition m n) (r : fin m) : (B.rowg r) ∈ B.rowp r :=
-option.get_mem _
-
-lemma rowp_eq_some_rowg (B : partition m n) (r : fin m) : B.rowp r = some (B.rowg r) :=
-rowg_mem _ _
-
-@[simp] lemma colg_mem (B : partition m n) (s : fin n) : (B.colg s) ∈ B.colp s :=
-option.get_mem _
-
-lemma colp_eq_some_colg (B : partition m n) (s : fin n) : B.colp s = some (B.colg s) :=
-colg_mem _ _
-
-@[simp] lemma rowp_rowg (B : partition m n) (r : fin m) : B.rowp.symm (B.rowg r) = some r :=
-B.rowp.mem_iff_mem.2 (rowg_mem _ _)
-
-@[simp] lemma colp_colg (B : partition m n) (s : fin n) : B.colp.symm (B.colg s) = some s :=
-B.colp.mem_iff_mem.2 (colg_mem _ _)
 
 lemma colp_ne_none_of_rowp_eq_none (B : partition m n) (v : fin (m + n))
   (hb : B.rowp.symm v = none) (hnb : B.colp.symm v = none) : false :=
@@ -154,28 +248,26 @@ lemma is_some_rowp_iff (B : partition m n) (j : fin (m + n)) :
 
 @[simp] lemma colp_rowg_eq_none (B : partition m n) (r : fin m) :
   B.colp.symm (B.rowg r) = none :=
-option.not_is_some_iff_eq_none.1 ((B.is_some_rowp_iff _).1 (is_some_symm_get _ _))
+option.not_is_some_iff_eq_none.1 ((B.is_some_rowp_iff _).1 (by simp))
 
 @[simp] lemma rowp_colg_eq_none (B : partition m n) (s : fin n) :
   B.rowp.symm (B.colg s) = none :=
-option.not_is_some_iff_eq_none.1 (mt (B.is_some_rowp_iff _).1 $ not_not.2 (is_some_symm_get _ _))
+option.not_is_some_iff_eq_none.1 (mt (B.is_some_rowp_iff _).1 (by simp))
 
-lemma eq_rowg_or_colg (B : partition m n) (i : fin (m + n)) :
-  (∃ j, i = B.rowg j) ∨ (∃ j, i = B.colg j) :=
+
+@[simp] lemma row_col_cases_on_colg {C : fin (m + n) → Sort*} (B : partition m n)
+  (c : fin n) (row : fin m → C (B.colg c)) (col : fin n → C (B.colg c)) :
+  (row_col_cases_on B (B.colg c) row col : C (B.colg c)) = col c :=
+have ∀ (v' : option (fin m)) (p : option (fin m) → Prop) (h : p v') (h1 : v' = none)
+  (f : Π (hpn : p none), fin n),
+  (option.rec (λ (h : p none), col (f h)) (λ (r : fin m) (h : p (some r)), row r)
+      v' h : C (colg B c)) = col (f (h1 ▸ h)),
+  from λ v' p pv' hn f, by subst hn,
 begin
-  dsimp only [rowg, colg],
-  by_cases h : ↥(B.rowp.symm i).is_some,
-  { cases option.is_some_iff_exists.1 h with j hj,
-    exact or.inl ⟨j, by rw [B.rowp.eq_some_iff] at hj;
-      rw [← option.some_inj, ← hj, option.some_get]⟩ },
-  { rw [(@not_iff_comm _ _ (classical.dec _) (classical.dec _)).1 (B.is_some_rowp_iff _).symm] at h,
-    cases option.is_some_iff_exists.1 h with j hj,
-    exact or.inr ⟨j, by rw [B.colp.eq_some_iff] at hj;
-      rw [← option.some_inj, ← hj, option.some_get]⟩ }
+  convert this (B.rowp.symm (B.colg c)) (λ x, B.rowp.symm (B.colg c) = x) rfl (by simp)
+    (λ h, option.get (row_col_cases_on._proof_1 B (colg B c) h)),
+  erw [← option.some_inj, option.some_get, colp_colg]
 end
-
-lemma rowg_ne_colg (B : partition m n) (i : fin m) (j : fin n) : B.rowg i ≠ B.colg j :=
-λ h, by simpa using congr_arg B.rowp.symm h
 
 @[simp] lemma option.get_inj {α : Type*} : Π {a b : option α} {ha : a.is_some} {hb : b.is_some},
   option.get ha = option.get hb ↔ a = b
@@ -185,8 +277,8 @@ lemma rowg_ne_colg (B : partition m n) (i : fin m) (j : fin n) : B.rowg i ≠ B.
   (h₂ : ∀ j, B.colg j = C.colg j) : B = C :=
 begin
   cases B, cases C,
-  simp [rowg, colg, function.funext_iff, pequiv.ext_iff] at *,
-  tauto
+  simp [rowg, colg, function.funext_iff] at *,
+  split; apply vector.ext; assumption
 end
 
 @[simp] lemma single_rowg_mul_rowp (B : partition m n) (i : fin m) :
@@ -242,69 +334,32 @@ begin
   split_ifs; tauto
 end
 
-lemma swap_rowp_eq (B : partition m n) (r : fin m) (s : fin n) :
-  (B.swap r s).rowp.to_matrix = (B.rowp.to_matrix : matrix _ _ ℚ)
-  - (single r (B.rowg r)).to_matrix + (single r (B.colg s)).to_matrix :=
-begin
-  dsimp [swap],
-  rw [to_matrix_trans, to_matrix_swap],
-  simp only [matrix.mul_add, sub_eq_add_neg, matrix.mul_one, matrix.mul_neg,
-    (to_matrix_trans _ _).symm, trans_single_of_mem _ (rowg_mem B r),
-    trans_single_of_eq_none _ (rowp_colg_eq_none B s), to_matrix_bot, neg_zero, add_zero]
-end
-
-lemma swap_colp_eq (B : partition m n) (r : fin m) (s : fin n) :
-  (B.swap r s).colp.to_matrix = (B.colp.to_matrix : matrix _ _ ℚ)
-  - (single s (B.colg s)).to_matrix + (single s (B.rowg r)).to_matrix :=
-begin
-  dsimp [swap],
-  rw [to_matrix_trans, to_matrix_swap],
-  simp only [matrix.mul_add, sub_eq_add_neg, matrix.mul_one, matrix.mul_neg,
-    (to_matrix_trans _ _).symm, trans_single_of_mem _ (colg_mem B s),
-    trans_single_of_eq_none _ (colp_rowg_eq_none B r), to_matrix_bot, neg_zero, add_zero]
-end
-
 @[simp] lemma rowg_swap (B : partition m n) (r : fin m) (s : fin n) :
   (B.swap r s).rowg r = B.colg s :=
 option.some_inj.1 begin
   dsimp [swap, rowg, colg, pequiv.trans],
-  rw [option.some_get, option.some_get],
-  conv in (B.rowp r) { rw rowp_eq_some_rowg },
-  dsimp [equiv.to_pequiv, equiv.swap_apply_def, rowg],
-  simp,
+  simp
 end
 
 @[simp] lemma colg_swap (B : partition m n) (r : fin m) (s : fin n) :
   (B.swap r s).colg s = B.rowg r :=
 option.some_inj.1 begin
   dsimp [swap, rowg, colg, pequiv.trans],
-  rw [option.some_get, option.some_get],
-  conv in (B.colp s) { rw colp_eq_some_colg },
-  dsimp [equiv.to_pequiv, equiv.swap_apply_def, colg],
-  rw [if_neg, if_pos rfl, option.some_get],
-  exact (rowg_ne_colg _ _ _).symm
+  simp
 end
 
 lemma rowg_swap_of_ne (B : partition m n) {i r : fin m} {s : fin n} (h : i ≠ r) :
   (B.swap r s).rowg i = B.rowg i :=
 option.some_inj.1 begin
   dsimp [swap, rowg, colg, pequiv.trans],
-  rw [option.some_get, option.bind_eq_some'],
-  use [B.rowg i, rowp_eq_some_rowg _ _],
-  dsimp [equiv.to_pequiv, equiv.swap_apply_def, option.get_some],
-  rw [← colg, ← rowg, if_neg (rowg_ne_colg B i s), if_neg
-    (mt B.injective_rowg.eq_iff.1 h), rowg]
+  simp [vector.nth_update_nth_of_ne h.symm]
 end
 
 lemma colg_swap_of_ne (B : partition m n) {r : fin m} {j s : fin n} (h : j ≠ s) :
   (B.swap r s).colg j = B.colg j :=
 option.some_inj.1 begin
   dsimp [swap, rowg, colg, pequiv.trans],
-  rw [option.some_get, option.bind_eq_some'],
-  use [B.colg j, colp_eq_some_colg _ _],
-  dsimp [equiv.to_pequiv, equiv.swap_apply_def, option.get_some],
-  rw [← colg, ← rowg, if_neg (rowg_ne_colg B r j).symm, if_neg
-    (mt B.injective_colg.eq_iff.1 h), colg]
+  simp [vector.nth_update_nth_of_ne h.symm]
 end
 
 lemma rowg_swap' (B : partition m n) (i r : fin m) (s : fin n) :
@@ -321,71 +376,58 @@ if hjs : j = s then by simp [hjs]
   (B.swap r s).swap r s = B :=
 by ext; intros; simp [rowg_swap', colg_swap']; split_ifs; cc
 
-@[simp] lemma colp_trans_swap_rowp_symm (B : partition m n) (r : fin m) (s : fin n) :
-  B.colp.trans (B.swap r s).rowp.symm = single s r :=
-begin
-  rw [swap, symm_trans_rev, ← equiv.to_pequiv_symm, ← equiv.perm.inv_def, equiv.swap_inv],
-  ext i j,
-  rw [mem_single_iff],
-  dsimp [pequiv.trans, equiv.to_pequiv, equiv.swap_apply_def],
-  simp only [coe, coe_mk_apply, option.mem_def, option.bind_eq_some'],
-  rw [option.mem_def.1 (colg_mem B i)],
-  simp [B.injective_colg.eq_iff, (B.rowg_ne_colg _ _).symm],
-  split_ifs; simp [*, eq_comm]
-end
+def fin.lastp : fin (m + 1 + n) := fin.cast (add_right_comm _ _ _) (fin.last (m + n))
 
-@[simp] lemma colp_mul_swap_rowp_tranpose (B : partition m n) (r : fin m) (s : fin n) :
-  (B.colp.to_matrix : matrix _ _ ℚ) ⬝ (B.swap r s).rowp.to_matrixᵀ = (single s r).to_matrix :=
-by rw [← colp_trans_swap_rowp_symm, to_matrix_trans, to_matrix_symm]
+def fin.castp (v : fin (m + n)) : fin (m + 1 + n) :=
+fin.cast (add_right_comm _ _ _) (fin.cast_succ v)
 
-lemma rowp_trans_swap_rowp_transpose (B : partition m n) (r : fin m) (s : fin n) :
-  B.rowp.trans (B.swap r s).rowp.symm = of_set {i | i ≠ r} :=
-begin
-  rw [swap, symm_trans_rev, ← equiv.to_pequiv_symm, ← equiv.perm.inv_def, equiv.swap_inv],
-  ext i j,
-  dsimp [pequiv.trans, equiv.to_pequiv, equiv.swap_apply_def],
-  simp only [coe, coe_mk_apply, option.mem_def, option.bind_eq_some'],
-  rw [option.mem_def.1 (rowg_mem B i)],
-  simp [B.injective_rowg.eq_iff, B.rowg_ne_colg],
-  split_ifs,
-  { simp * },
-  { simp *; split; intros; simp * at * }
-end
+def add_row (B : partition m n) : partition (m + 1) n :=
+{ row_indices := (B.row_indices.map fin.castp).append ⟨[fin.lastp], rfl⟩,
+  col_indices := B.col_indices.map (fin.cast (add_right_comm _ _ _) ∘ fin.cast_succ),
+  mem_row_indices_or_col_indices := begin
+    rintros ⟨v, hv⟩,
+    simp only [fin.cast, fin.cast_le, fin.cast_lt, fin.last, vector.to_list_map,
+      fin.eq_iff_veq, list.mem_map, fin.cast_le, vector.to_list_append, list.mem_append,
+      function.comp, fin.cast_succ, fin.cast_add, fin.exists_iff, and_comm _ (_ = _),
+      exists_and_distrib_left, exists_eq_left, fin.lastp, fin.castp],
+    by_cases hvmn : v = m + n,
+    { simp [hvmn] },
+    { have hv : v < m + n, from lt_of_le_of_ne (nat.le_of_lt_succ $ by simpa using hv) hvmn,
+      cases B.mem_row_indices_or_col_indices ⟨v, hv⟩; simp * }
+  end }
 
-lemma swap_rowp_transpose_mul_single_of_ne (B : partition m n) {r : fin m}
-  (s : fin n) {i : fin m} (hir : i ≠ r) :
-  ((B.swap r s).rowp.to_matrixᵀ : matrix _ _ ℚ) ⬝ (single i (0 : fin 1)).to_matrix =
-  B.rowp.to_matrixᵀ ⬝ (single i 0).to_matrix :=
-begin
-  simp only [swap_rowp_eq, sub_eq_add_neg, matrix.mul_add, matrix.mul_neg, matrix.mul_one,
-    matrix.add_mul, (to_matrix_trans _ _).symm, (to_matrix_symm _).symm, transpose_add,
-    transpose_neg, matrix.neg_mul, symm_trans_rev, trans_assoc],
-  rw [trans_single_of_mem _ (rowp_rowg _ _), trans_single_of_eq_none, trans_single_of_eq_none,
-    to_matrix_bot, neg_zero, add_zero, add_zero];
-  {dsimp [single]; simp [*, B.injective_rowg.eq_iff]} <|> apply_instance
-end
+lemma add_row_rowg_last (B : partition m n) : B.add_row.rowg (fin.last _) = fin.lastp :=
+have (fin.last m).1 = (B.row_indices.map fin.castp).to_list.length := by simp [fin.last],
+option.some_inj.1 $ by simp only [add_row, rowg, vector.nth_eq_nth_le, vector.to_list_append,
+  (list.nth_le_nth _).symm, list.nth_concat_length, this, vector.to_list_mk]; refl
 
-@[simp] lemma swap_rowp_transpose_mul_single (B : partition m n) (r : fin m) (s : fin n) :
-  ((B.swap r s).rowp.to_matrixᵀ : matrix _ _ ℚ) ⬝ (single r (0 : fin 1)).to_matrix =
-  B.colp.to_matrixᵀ ⬝ (single s (0 : fin 1)).to_matrix :=
-begin
-  simp only [swap_rowp_eq, sub_eq_add_neg, matrix.mul_add, matrix.mul_neg, matrix.mul_one,
-    matrix.add_mul, (to_matrix_trans _ _).symm, (to_matrix_symm _).symm, transpose_add,
-    transpose_neg, matrix.neg_mul, symm_trans_rev, trans_assoc, symm_single],
-  rw [trans_single_of_mem _ (rowp_rowg _ _), trans_single_of_mem _ (mem_single _ _),
-    trans_single_of_mem _ (mem_single _ _), trans_single_of_mem _ (colp_colg _ _)],
-  simp,
-  all_goals {apply_instance}
-end
+lemma add_row_rowg_cast_succ (B : partition m n) (i : fin m) :
+  B.add_row.rowg (fin.cast_succ i) = fin.castp (B.rowg i) :=
+have i.1 < (B.row_indices.to_list.map fin.castp).length, by simp [i.2],
+by simp [add_row, rowg, vector.nth_eq_nth_le, vector.to_list_append,
+  (list.nth_le_nth _).symm, list.nth_concat_length, vector.to_list_mk,
+  list.nth_le_append _ this, list.nth_le_map]
 
-def equiv_aux : partition m n ≃ Σ' (rowp : fin m ≃. fin (m + n))
-  (colp : fin n ≃. fin (m + n))
-  ( rowp_trans_rowp_symm : rowp.trans rowp.symm = pequiv.refl (fin m) )
-( colp_trans_colp_symm : colp.trans colp.symm = pequiv.refl (fin n) ),
-  rowp.trans colp.symm = ⊥ :=
-{ to_fun := λ ⟨a, b, c, d, e⟩, ⟨a, b, c, d, e⟩,
-  inv_fun := λ ⟨a, b, c, d, e⟩, ⟨a, b, c, d, e⟩,
-  left_inv := λ ⟨_, _, _, _, _⟩, rfl,
-  right_inv := λ ⟨_, _, _, _, _⟩, rfl }
+lemma add_row_colg (B : partition m n) (j : fin n) : B.add_row.colg j = fin.castp (B.colg j) :=
+fin.eq_of_veq $ by simp [add_row, colg, vector.nth_eq_nth_le, fin.castp]
+
+def dual (B : partition m n) : partition n m :=
+{ row_indices := B.col_indices.map (fin.cast (add_comm _ _)),
+  col_indices := B.row_indices.map (fin.cast (add_comm _ _)),
+  mem_row_indices_or_col_indices := λ v,
+    (B.mem_row_indices_or_col_indices (fin.cast (add_comm _ _) v)).elim
+      (λ h, or.inr begin
+          simp only [vector.to_list_map, list.mem_map],
+          use fin.cast (add_comm _ _) v,
+          simp [fin.eq_iff_veq, h],
+        end)
+      (λ h, or.inl begin
+          simp only [vector.to_list_map, list.mem_map],
+          use fin.cast (add_comm _ _) v,
+          simp [fin.eq_iff_veq, h],
+        end) }
+
+@[simp] lemma dual_dual (B : partition m n) : B.dual.dual = B :=
+by cases B; simp [dual]; split; ext; simp [fin.eq_iff_veq]
 
 end partition
