@@ -348,6 +348,9 @@ option.some_inj.1 begin
   simp
 end
 
+@[simp] lemma swap_ne_self (B : partition m n) (r : fin m) (c : fin n) : (B.swap r c) ≠ B :=
+mt (congr_arg (λ B : partition m n, B.rowg r)) $ by simp
+
 lemma rowg_swap_of_ne (B : partition m n) {i r : fin m} {s : fin n} (h : i ≠ r) :
   (B.swap r s).rowg i = B.rowg i :=
 option.some_inj.1 begin
@@ -380,6 +383,15 @@ def fin.lastp : fin (m + 1 + n) := fin.cast (add_right_comm _ _ _) (fin.last (m 
 
 def fin.castp (v : fin (m + n)) : fin (m + 1 + n) :=
 fin.cast (add_right_comm _ _ _) (fin.cast_succ v)
+
+@[simp] lemma fin.castp_ne_lastp (v : fin (m + n)) : (fin.lastp : fin (m + 1 + n)) ≠ fin.castp v :=
+ne_of_gt v.2
+
+@[simp] lemma fin.lastp_ne_castp (v : fin (m + n)) : fin.castp v ≠ fin.lastp :=
+ne_of_lt v.2
+
+lemma fin.injective_castp : injective (@fin.castp m n) :=
+λ ⟨_, _⟩ ⟨_, _⟩, by simp [fin.castp, fin.cast, fin.cast_le, fin.cast_lt, fin.cast_succ]
 
 def add_row (B : partition m n) : partition (m + 1) n :=
 { row_indices := (B.row_indices.map fin.castp).append ⟨[fin.lastp], rfl⟩,

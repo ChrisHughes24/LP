@@ -60,6 +60,9 @@ lemma sol_set_eq_dead_set_inter :
    T.sol_set = dead_set T ∩ { x | ∀ i, i ∈ T.restricted → 0 ≤ x i 0 } :=
 set.inter_right_comm _ _ _
 
+lemma sol_set_eq_res_set_inter_dead_set : T.sol_set = T.res_set ∩ T.dead_set :=
+by simp [sol_set, res_set, dead_set, set.ext_iff]; tauto
+
 /-- Predicate for a variable being unbounded above in the `res_set` -/
 def is_unbounded_above (i : fin (m + n)) : Prop :=
 ∀ q : ℚ, ∃ x : cvec (m + n), x ∈ sol_set T ∧ q ≤ x i 0
@@ -109,6 +112,9 @@ end predicates
 
 section predicate_lemmas
 variable {T : tableau m n}
+
+lemma eta : tableau.mk T.to_partition T.to_matrix T.const T.restricted T.dead = T :=
+by cases T; refl
 
 lemma mem_flat_iff {x : cvec (m + n)} : x ∈ T.flat ↔
   ∀ r, x (T.to_partition.rowg r) 0 = univ.sum
