@@ -591,30 +591,41 @@ subrelation.wf
 
 end blands_rule
 
-@[derive _root_.decidable_eq] inductive termination : Type
-| while     : termination
-| unbounded : termination
-| optimal   : termination
+@[derive _root_.decidable_eq] inductive termination (n : ℕ) : Type
+| while {}              : termination
+| unbounded (c : fin n) : termination
+| optimal {}            : termination
+
+namespace termination
+
+lemma injective_unbounded : function.injective (@unbounded n) :=
+λ _ _ h, by injection h
+
+@[simp] lemma unbounded_inj {c c' : fin n} : unbounded c = unbounded c' ↔ c = c' :=
+injective_unbounded.eq_iff
+
+end termination
 
 open termination
 
-instance : has_repr termination := ⟨λ t, termination.cases_on t "while" "unbounded" "optimal"⟩
-
-instance : fintype termination := ⟨⟨quotient.mk [while, unbounded, optimal], dec_trivial⟩,
-  λ x, by cases x; exact dec_trivial⟩
+instance {n : ℕ} : has_repr $ termination n :=
+⟨λ t, termination.cases_on t
+  "while"
+  (λ c, "unbounded " ++ repr c)
+  "optimal"⟩
 
 open termination
 
 /-- The simplex algorithm -/
 def simplex (w : tableau m n → bool) (obj : fin m) : Π (T : tableau m n) (hT : feasible T),
-  tableau m n × termination
+  tableau m n × termination n
 | T := λ hT, cond (w T)
   (match pivot_col T obj, @feasible_of_mem_pivot_row_and_col _ _ _ obj hT,
       @rel.pivot m n obj _ hT with
     | none,   hc, hrel := (T, optimal)
     | some c, hc, hrel :=
       match pivot_row T obj c, @hc _ rfl, (λ r, @hrel r c rfl) with
-      | none,   hr, hrel := (T, unbounded)
+      | none,   hr, hrel := (T, unbounded c)
       | some r, hr, hrel := have wf : rel obj (pivot T r c) T, from hrel _ rfl,
         simplex (T.pivot r c) (hr rfl)
       end
@@ -636,8 +647,8 @@ lemma simplex_spec_aux (w : tableau m n → bool) (obj : fin m) :
   ((T.simplex w obj hT).2 = while ∧ w (T.simplex w obj hT).1 = ff) ∨
   ((T.simplex w obj hT).2 = optimal ∧ w (T.simplex w obj hT).1 = tt ∧
     pivot_col (T.simplex w obj hT).1 obj = none) ∨
-  ((T.simplex w obj hT).2 = unbounded ∧ w (T.simplex w obj hT).1 = tt ∧
-    ∃ c, c ∈ pivot_col (T.simplex w obj hT).1 obj ∧
+  ∃ c, ((T.simplex w obj hT).2 = unbounded c ∧ w (T.simplex w obj hT).1 = tt ∧
+    c ∈ pivot_col (T.simplex w obj hT).1 obj ∧
     pivot_row (T.simplex w obj hT).1 obj c = none)
 | T := λ hT,
   begin
@@ -646,7 +657,8 @@ lemma simplex_spec_aux (w : tableau m n → bool) (obj : fin m) :
     { cases hc : pivot_col T obj with c,
       { rw simplex, simp [hc, hw, simplex._match_1] },
       { cases hr : pivot_row T obj c with r,
-        { rw simplex, simp [hr, hc, hw, simplex._match_1, simplex._match_2] },
+        { rw simplex,
+          simp [hr, hc, hw, simplex._match_1, simplex._match_2] },
         { rw [← simplex_pivot hT hw hc hr],
           exact have wf : rel obj (T.pivot r c) T, from rel.pivot hT hc hr,
             simplex_spec_aux _ _ } } }
@@ -665,7 +677,7 @@ by rw simplex; simp [hc, hw, simplex._match_1]
 
 lemma simplex_pivot_row_eq_none {w : tableau m n → bool} {T : tableau m n} {hT : feasible T}
   {obj : fin m} (hw : w T = tt) {c} (hc : c ∈ pivot_col T obj)
-  (hr : pivot_row T obj c = none) : T.simplex w obj hT = (T, unbounded) :=
+  (hr : pivot_row T obj c = none) : T.simplex w obj hT = (T, unbounded c) :=
 by rw simplex; simp [hw, show _ = _, from hc, hr, simplex._match_1, simplex._match_2]
 
 lemma simplex_induction (P : tableau m n → Prop) (w : tableau m n → bool) (obj : fin m):
@@ -704,15 +716,6 @@ simplex_induction (λ T', ∀ (hT' : feasible T'), T'.simplex w obj hT' = T.simp
   (obj : fin m) : (T.simplex w obj hT).1.to_partition.rowg obj = T.to_partition.rowg obj :=
 simplex_induction (λ T', T'.to_partition.rowg obj = T.to_partition.rowg obj) _ _ _ rfl
   (λ T' r c hw hc hr, by simp [rowg_swap_of_ne _ (pivot_row_spec hr).1])
-
-@[simp] lemma colg_simplex_of_dead_aux {T : tableau m n} {hT : feasible T} {w : tableau m n → bool}
-  {obj : fin m} {c' : fin n} :  c' ∈ (T.simplex w obj hT).1.dead →
-  (T.simplex w obj hT).1.to_partition.colg c' = T.to_partition.colg c' :=
-simplex_induction (λ T', c' ∈ T'.dead → T'.to_partition.colg c' = T.to_partition.colg c') _ obj _
-  (λ _, rfl)
-  (λ T' r c hw hc hr hfT' ih hdead,
-    have c' ≠ c, from λ hcc, (pivot_col_spec hc).2 (by simp * at *),
-    by simp [colg_swap_of_ne _ this, ih hdead])
 
 @[simp] lemma flat_simplex (T : tableau m n) (hT : feasible T) (w : tableau m n → bool)
   (obj : fin m) : (T.simplex w obj hT).1.flat = T.flat :=
@@ -770,21 +773,23 @@ by have := simplex_spec_aux w obj T hT; finish
 lemma termination_eq_optimal_iff_pivot_col_eq_none {T : tableau m n}
   {hT : feasible T} {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = optimal ↔
   w (T.simplex w obj hT).1 = tt ∧ pivot_col (T.simplex w obj hT).1 obj = none :=
-by have := simplex_spec_aux w obj T hT; finish
+by rcases simplex_spec_aux w obj T hT with _ | ⟨_, _, _⟩ | ⟨⟨_, _⟩, _, _, _, _⟩; simp * at *
 
 lemma termination_eq_unbounded_iff_pivot_row_eq_none {T : tableau m n} {hT : feasible T}
-  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = unbounded ↔
-  w (T.simplex w obj hT).1 = tt ∧ ∃ c, c ∈ pivot_col (T.simplex w obj hT).1 obj ∧
-  pivot_row (T.simplex w obj hT).1 obj c = none :=
-by have := simplex_spec_aux w obj T hT; finish
+  {w : tableau m n → bool} {obj : fin m} {c : fin n} :
+  (T.simplex w obj hT).2 = unbounded c ↔
+  w (T.simplex w obj hT).1 = tt ∧ c ∈ pivot_col (T.simplex w obj hT).1 obj ∧
+    pivot_row (T.simplex w obj hT).1 obj c = none :=
+by split; intros; rcases simplex_spec_aux w obj T hT with
+  _ | ⟨_, _, _⟩ | ⟨⟨⟨_, _⟩, _⟩, _, _, _, _⟩; simp * at *
 
-lemma termination_eq_unbounded_iff_aux {T : tableau m n} {hT : feasible T}
-  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = unbounded →
+lemma unbounded_of_termination_eq_unbounded {T : tableau m n} {hT : feasible T}
+  {w : tableau m n → bool} {obj : fin m} {c : fin n} : (T.simplex w obj hT).2 = unbounded c →
   w (T.simplex w obj hT).1 = tt ∧
   is_unbounded_above T (T.to_partition.rowg obj) :=
 begin
   rw termination_eq_unbounded_iff_pivot_row_eq_none,
-  rintros ⟨_, c, hc⟩,
+  rintros ⟨_, hc⟩,
   simpa * using pivot_row_eq_none feasible_simplex hc.2 hc.1
 end
 
@@ -799,20 +804,23 @@ begin
     simpa * using pivot_col_eq_none feasible_simplex hc },
   { cases ht : (T.simplex w obj hT).2,
     { simp [*, termination_eq_while_iff] at * },
-    { cases termination_eq_unbounded_iff_aux ht,
+    { cases unbounded_of_termination_eq_unbounded ht,
       simp [*, not_optimal_of_unbounded_above right] },
     { simp [*, termination_eq_optimal_iff_pivot_col_eq_none] at * } }
 end
 
 lemma termination_eq_unbounded_iff {T : tableau m n} {hT : feasible T}
-  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = unbounded ↔
-  w (T.simplex w obj hT).1 = tt ∧ is_unbounded_above T (T.to_partition.rowg obj) :=
-⟨termination_eq_unbounded_iff_aux,
-  begin
-    have := @not_optimal_of_unbounded_above m n (T.simplex w obj hT).1 (T.to_partition.rowg obj)
-      ((T.simplex w obj hT).1.of_col 0),
-    cases ht : (T.simplex w obj hT).2;
-    simp [termination_eq_optimal_iff, termination_eq_while_iff, *] at *
-  end⟩
+  {w : tableau m n → bool} {obj : fin m} {c : fin n}: (T.simplex w obj hT).2 = unbounded c ↔
+  w (T.simplex w obj hT).1 = tt ∧ is_unbounded_above T (T.to_partition.rowg obj)
+  ∧ c ∈ pivot_col (T.simplex w obj hT).1 obj :=
+⟨λ hc, and.assoc.1 $ ⟨unbounded_of_termination_eq_unbounded hc,
+  (termination_eq_unbounded_iff_pivot_row_eq_none.1 hc).2.1⟩,
+begin
+  have := @not_optimal_of_unbounded_above m n (T.simplex w obj hT).1 (T.to_partition.rowg obj)
+    ((T.simplex w obj hT).1.of_col 0),
+  cases ht : (T.simplex w obj hT).2;
+  simp [termination_eq_optimal_iff, termination_eq_while_iff,
+    termination_eq_unbounded_iff_pivot_row_eq_none, *] at *
+end⟩
 
 end tableau

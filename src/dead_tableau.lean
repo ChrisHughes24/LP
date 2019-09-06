@@ -108,12 +108,20 @@ let p := (T.to_matrix r c)⁻¹ in
   restricted := T.restricted,
   dead := T.dead }
 
+def restrict (T : tableau m n) (v : fin (m + n)) : tableau m n :=
+{ restricted := insert v T.restricted,
+  ..T }
+
+def kill_col (T : tableau m n) (c : fin n) : tableau m n :=
+{ dead := insert c T.dead,
+  ..T }
+
 end predicates
 
 section predicate_lemmas
 variable {T : tableau m n}
 
-lemma eta : tableau.mk T.to_partition T.to_matrix T.const T.restricted T.dead = T :=
+@[simp] lemma eta : tableau.mk T.to_partition T.to_matrix T.const T.restricted T.dead = T :=
 by cases T; refl
 
 lemma mem_flat_iff {x : cvec (m + n)} : x ∈ T.flat ↔
@@ -222,6 +230,79 @@ suffices (∀ v : fin (m + n), v ∈ T.restricted → (0 : ℚ) ≤ T.of_col 0 v
 
 @[simp] lemma of_col_zero_mem_sol_set_iff : T.of_col 0 ∈ T.sol_set ↔ T.feasible :=
 by simp [sol_set,  of_col_zero_mem_res_set_iff]
+
+@[simp] lemma to_matrix_restrict (v : fin (m + n)) : (T.restrict v).to_matrix = T.to_matrix := rfl
+
+@[simp] lemma const_restrict (v : fin (m + n)) : (T.restrict v).const = T.const := rfl
+
+@[simp] lemma to_partition_restrict (v : fin (m + n)) :
+  (T.restrict v).to_partition = T.to_partition := rfl
+
+@[simp] lemma dead_restrict (v : fin (m + n)) : (T.restrict v).dead = T.dead := rfl
+
+@[simp] lemma restricted_restrict (v : fin (m + n)) :
+  (T.restrict v).restricted = insert v T.restricted := rfl
+
+@[simp] lemma flat_restrict (v : fin (m + n)) : (T.restrict v).flat = T.flat := by simp [flat]
+
+@[simp] lemma dead_set_restrict (v : fin (m + n)) : (T.restrict v).dead_set = T.dead_set :=
+by simp [dead_set]
+
+lemma res_set_restrict (v : fin (m + n)) : (T.restrict v).res_set =
+  T.res_set ∩ {x | 0 ≤ x v 0} :=
+begin
+  simp only [res_set, flat_restrict, set.inter_assoc],
+  ext x,
+  exact ⟨λ h, ⟨h.1, λ i hi, h.2 _ $ by simp [hi], h.2 _ $ by simp⟩,
+    λ h, ⟨h.1, λ i hi, (mem_insert.1 hi).elim (λ hv, hv.symm ▸ h.2.2) $ h.2.1 _⟩⟩
+end
+
+lemma sol_set_restrict (v : fin (m + n)) : (T.restrict v).sol_set =
+  T.sol_set ∩ {x | 0 ≤ x v 0} :=
+by simp [sol_set_eq_res_set_inter_dead_set, res_set_restrict, set.inter_comm, set.inter_assoc,
+  set.inter_left_comm]
+
+lemma feasible_restrict {v : fin (m + n)} (hfT : T.feasible)
+  (h : (∃ c, v = T.to_partition.colg c) ∨ ∃ r, v = T.to_partition.rowg r ∧  0 ≤ T.const r 0) :
+  (T.restrict v).feasible :=
+h.elim
+  (λ ⟨c, hc⟩, hc.symm ▸ λ i hi, hfT _ $ by simpa using hi)
+  (λ ⟨r, hrv, hr⟩, hrv.symm ▸ λ i hi, (mem_insert.1 hi).elim
+    (λ h, by simp [T.to_partition.injective_rowg.eq_iff, *] at *)
+    (λ hres, hfT _ $ by simpa using hres))
+
+@[simp] lemma to_matrix_kill_col (c : fin n) :
+  (T.kill_col c).to_matrix = T.to_matrix := rfl
+
+@[simp] lemma const_kill_col (c : fin n) : (T.kill_col c).const = T.const := rfl
+
+@[simp] lemma to_partition_kill_col (c : fin n) :
+  (T.kill_col c).to_partition = T.to_partition := rfl
+
+@[simp] lemma dead_kill_col (c : fin n) : (T.kill_col c).dead = insert c T.dead := rfl
+
+@[simp] lemma restricted_kill_col (c : fin n) :
+  (T.kill_col c).restricted = T.restricted := rfl
+
+@[simp] lemma flat_kill_col (c : fin n) : (T.kill_col c).flat = T.flat := by simp [flat]
+
+@[simp] lemma res_set_kill_col (c : fin n) : (T.kill_col c).res_set = T.res_set := by simp [res_set]
+
+@[simp] lemma dead_set_kill_col (c : fin n) : (T.kill_col c).dead_set =
+  T.dead_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
+begin
+  simp only [dead_set, flat_restrict, set.inter_assoc],
+  ext x,
+  exact ⟨λ h, ⟨h.1, λ i hi, h.2 _ $ by simp [hi], h.2 _ $ by simp⟩,
+    λ h, ⟨h.1, λ i hi, (mem_insert.1 hi).elim (λ hv, hv.symm ▸ h.2.2) $ h.2.1 _⟩⟩
+end
+
+lemma sol_set_kill_col (c : fin n) : (T.kill_col c).sol_set =
+  T.sol_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
+by simp [sol_set_eq_res_set_inter_dead_set, res_set_restrict, set.inter_comm, set.inter_assoc,
+  set.inter_left_comm]
+
+@[simp] lemma feasible_kill_col_iff {c : fin n} : (T.kill_col c).feasible ↔ T.feasible := iff.rfl
 
 lemma is_unbounded_above_colg_aux {c : fin n} (hT : T.feasible) (hdead : c ∉ T.dead)
   (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.to_matrix i c) (q : ℚ) :
@@ -567,8 +648,8 @@ lemma feasible_pivot {T : tableau m n} (hT : T.feasible) {r c}
   (hres : T.to_partition.rowg r ∈ T.restricted)
   (hpos : T.to_partition.colg c ∈ T.restricted → T.to_matrix r c < 0)
   (hrmin : ∀ (i : fin m), T.to_partition.rowg i ∈ T.restricted →
-          0 < T.to_matrix i c / T.to_matrix r c →
-          abs (T.const r 0 / T.to_matrix r c) ≤ abs (T.const i 0 / T.to_matrix i c)) :
+    0 < T.to_matrix i c / T.to_matrix r c →
+    abs (T.const r 0 / T.to_matrix r c) ≤ abs (T.const i 0 / T.to_matrix i c)) :
   (T.pivot r c).feasible :=
 begin
   assume i hi,
@@ -609,6 +690,26 @@ feasible_pivot hT hres (λ hcres, inv_neg'.1 (neg_of_mul_neg_left hrneg (le_of_l
       suffices (T.to_matrix obj c / T.to_matrix r c) / (T.to_matrix i c / T.to_matrix r c) < 0,
         by rwa [div_div_div_cancel_right _ _ hTrc0] at this,
       div_neg_of_neg_of_pos hrneg hir))
+
+/-- Used in sign_of_max -/
+lemma feasible_pivot_obj_of_nonpos {T : tableau m n} {obj : fin m} (hT : T.feasible) {c}
+  (hc : T.to_partition.colg c ∈ T.restricted → 0 < T.to_matrix obj c)
+  (hr : ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted →
+    0 ≤ T.to_matrix obj c / T.to_matrix r c)
+  (hobj : T.const obj 0 ≤ 0) : feasible (T.pivot obj c) :=
+λ i hi,
+if hiobj : i = obj
+then by rw [hiobj, const_pivot_row, neg_div, neg_nonneg];
+  exact mul_nonpos_of_nonpos_of_nonneg hobj (le_of_lt $ by simp [*, inv_pos'] at *)
+else begin
+  rw [const_pivot_of_ne _ hiobj],
+  rw [to_partition_pivot, rowg_swap_of_ne _ hiobj, restricted_pivot] at hi,
+  refine add_nonneg (hT _ hi) (neg_nonneg.2 _),
+  rw [div_eq_mul_inv, mul_right_comm],
+  exact mul_nonpos_of_nonneg_of_nonpos
+    (inv_nonneg.1 (by simpa [mul_inv'] using hr _ (ne.symm hiobj) hi))
+    hobj
+end
 
 lemma simplex_const_obj_le {T : tableau m n} {obj : fin m} (hT : T.feasible) {r c}
   (hres : T.to_partition.rowg r ∈ T.restricted)

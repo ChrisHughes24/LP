@@ -1,4 +1,4 @@
-import dead_simplex
+import unbounded_refactor
 
 open matrix fintype finset function pequiv partition tableau tableau.termination
 variables {m n : ℕ}
@@ -10,7 +10,7 @@ local postfix `ᵀ` : 1500 := transpose
 
 @[derive _root_.decidable_eq] inductive undo : Type
 | unrestrict : ℕ → undo
-| revive     : ℕ → undo
+| revive_col : ℕ → undo
 | delete     : ℕ → undo
 
 instance : has_repr undo :=
@@ -85,18 +85,17 @@ end predicates
 section simplex
 
 def simplex (w : tableau m n → bool) (obj : fin m) (T : stableau m n) :
-  stableau m n × termination :=
+  stableau m n × termination n :=
 let s := T.to_tableau.simplex w obj T.feasible in
 prod.mk
-  { feasible := feasible_simplex,
-    undo_stack := T.undo_stack,
-    ..s.1 }
+  { to_tableau := s.1,
+    feasible := feasible_simplex,
+    undo_stack := T.undo_stack }
   s.2
 
 /- Transfer lemmas about `tableau.simplex` onto `stableau.simplex` -/
 @[simp] lemma simplex_to_tableau (w : tableau m n → bool) (obj : fin m) (T : stableau m n) :
-  (T.to_tableau.simplex w obj T.feasible).1 = (T.simplex w obj).1.to_tableau :=
-tableau.eta.symm
+  (T.to_tableau.simplex w obj T.feasible).1 = (T.simplex w obj).1.to_tableau := rfl
 
 @[simp] lemma rowg_simplex (T : stableau m n) (w : tableau m n → bool)
   (obj : fin m) : (T.simplex w obj).1.to_partition.rowg obj = T.to_partition.rowg obj :=
@@ -117,6 +116,17 @@ tableau.dead_set_simplex _ _ _ _
 @[simp] lemma sol_set_simplex (T : stableau m n) (w : tableau m n → bool) (obj : fin m) :
   (T.simplex w obj).1.sol_set = T.sol_set :=
 tableau.sol_set_simplex _ _ _ _
+
+@[simp] lemma restricted_simplex (T : stableau m n) (w : tableau m n → bool) (obj : fin m) :
+  (T.simplex w obj).1.restricted = T.restricted :=
+tableau.restricted_simplex _ _ _ _
+
+@[simp] lemma dead_simplex (T : stableau m n) (w : tableau m n → bool) (obj : fin m) :
+  (T.simplex w obj).1.dead = T.dead :=
+tableau.dead_simplex _ _ _ _
+
+@[simp] lemma undo_stack_simplex (T : stableau m n) (w : tableau m n → bool) (obj : fin m) :
+  (T.simplex w obj).1.undo_stack = T.undo_stack := rfl
 
 @[simp] lemma of_col_simplex_mem_sol_set (T : stableau m n) (w : tableau m n → bool) (obj : fin m) :
   (T.simplex w obj).1.of_col 0 ∈ T.sol_set :=
@@ -148,9 +158,11 @@ lemma termination_eq_optimal_iff {T : stableau m n}
   is_optimal T ((T.simplex w obj).1.of_col 0) (T.to_partition.rowg obj) :=
 by rw [simplex, tableau.termination_eq_optimal_iff, simplex_to_tableau]; refl
 
-lemma termination_eq_unbounded_iff {T : stableau m n} {w : tableau m n → bool} {obj : fin m} :
-  (T.simplex w obj).2 = unbounded ↔
-  w (T.simplex w obj).1.to_tableau = tt ∧ is_unbounded_above T (T.to_partition.rowg obj) :=
+lemma termination_eq_unbounded_iff {T : stableau m n} {w : tableau m n → bool} {obj : fin m}
+  (c : fin n) :
+  ((T.simplex w obj).2 = unbounded c) ↔
+  w (T.simplex w obj).1.to_tableau = tt ∧ is_unbounded_above T (T.to_partition.rowg obj)
+  ∧ c ∈ pivot_col (T.simplex w obj).1.to_tableau obj :=
 by rw [simplex, tableau.termination_eq_unbounded_iff, simplex_to_tableau]; refl
 
 end simplex
@@ -317,13 +329,29 @@ end add_row
 
 section sign_of_max_row
 
+lemma sign_of_max_row_feasible {T : tableau m n} (obj : fin m) (hT : T.feasible) (c : fin n)
+  (hc : (T.simplex (λ T', T'.const obj 0 ≤ 0) obj hT).2 = unbounded c) :
+  ((T.simplex (λ T', T'.const obj 0 ≤ 0) obj hT).1.pivot obj c).feasible :=
+by rw [tableau.termination_eq_unbounded_iff_pivot_row_eq_none] at hc; exact
+feasible_pivot_obj_of_nonpos (feasible_simplex)
+  (λ hcres, by have := pivot_col_spec hc.2.1; simp * at *)
+  (pivot_row_eq_none_aux hc.2.2 hc.2.1)
+  (by finish)
+
+set_option eqn_compiler.zeta true
+
 def sign_of_max_row (T : stableau m n) (obj : fin m) : stableau m n × ℤ :=
-let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in prod.mk T'.1 $
-match T'.2 with
-| while     := 1
-| unbounded := 1
-| optimal   := if T'.1.const obj 0 = 0 then 0 else -1
+let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+match T'.2, sign_of_max_row_feasible obj T.feasible with
+| while,       _  := (T'.1, 1)
+| unbounded c, hc :=
+  ({to_tableau := T'.1.to_tableau.pivot obj c,
+    undo_stack := T.undo_stack,
+    feasible := hc _ rfl }, 1)
+| optimal,     _  := (T'.1, if T'.1.const obj 0 = 0 then 0 else -1)
 end
+
+set_option eqn_compiler.zeta false
 
 lemma sign_of_max_row_eq_zero {T : stableau m n} {obj : fin m} :
   (sign_of_max_row T obj).2 = 0 ↔
@@ -331,7 +359,7 @@ lemma sign_of_max_row_eq_zero {T : stableau m n} {obj : fin m} :
       (T.to_partition.rowg obj) :=
 let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
 begin
-  cases h : T'.2,
+  cases h : T'.2 with c,
   { simp only [sign_of_max_row, *, termination_eq_while_iff, is_optimal_iff, classical.not_forall,
       not_exists, exists_prop, false_iff, not_and, not_le, to_bool_ff_iff, one_ne_zero] at *,
     assume x hx0 hxs,
@@ -340,7 +368,7 @@ begin
   { simp only [sign_of_max_row, *, termination_eq_unbounded_iff, is_unbounded_above,
       classical.not_forall, not_exists, exists_prop, false_iff, not_and, not_le, to_bool_iff,
       one_ne_zero, is_optimal_iff] at * {contextual := tt},
-    cases h.2 1 with y hy,
+    cases h.2.1 1 with y hy,
     assume x hxs hx,
     use [y, hy.1],
     exact lt_of_lt_of_le zero_lt_one hy.2 },
@@ -367,7 +395,7 @@ begin
     exact ⟨T'.1.of_col 0, by simp [*, T']⟩ },
   { simp only [sign_of_max_row, *, termination_eq_unbounded_iff, eq_self_iff_true,
       true_iff, to_bool_iff] at *,
-    cases h.2 1 with y hy,
+    cases h.2.1 1 with y hy,
     use [y, hy.1],
     exact lt_of_lt_of_le zero_lt_one hy.2 },
   { simp only [sign_of_max_row, *, termination_eq_optimal_iff, to_bool_iff] at *,
@@ -390,7 +418,7 @@ begin
     simp [le_of_lt h] },
   { simp only [sign_of_max_row, *, termination_eq_unbounded_iff, false_iff, classical.not_forall,
       show (1 : ℤ) ≠ -1, from dec_trivial, to_bool_iff, not_lt, not_le] at *,
-    cases h.2 1 with y hy,
+    cases h.2.1 1 with y hy,
     use [y, hy.1],
     exact le_trans zero_le_one hy.2 },
   { simp only [sign_of_max_row, *, termination_eq_optimal_iff, to_bool_iff] at *,
@@ -401,6 +429,86 @@ begin
       assume x hx,
       exact lt_of_le_of_lt (h.2.2 x hx) (by apply lt_of_le_of_ne; simp; tauto) } }
 end
+
+lemma sign_of_max_row_eq_simplex_or_pivot (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1 = (T.simplex (λ T', T'.const obj 0 ≤ 0) obj).1 ∨
+  ∃ c, c ∈ pivot_col (T.simplex (λ T', T'.const obj 0 ≤ 0) obj).1.to_tableau obj ∧
+    (sign_of_max_row T obj).1.to_tableau =
+      (T.simplex (λ T', T'.const obj 0 ≤ 0) obj).1.to_tableau.pivot obj c :=
+let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+begin
+  cases h : T'.2 with c,
+  { simp [sign_of_max_row, h] },
+  { right, use c,
+    simp [sign_of_max_row, h, ((termination_eq_unbounded_iff _).1 h).2] },
+  { simp [sign_of_max_row, h] }
+end
+
+@[simp] lemma sign_of_max_row_flat (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1.flat = T.flat :=
+(sign_of_max_row_eq_simplex_or_pivot T obj).elim
+  (by simp { contextual := tt })
+  (λ ⟨c, hc⟩, begin
+    rw [flat, hc.2, simplex, ← flat_simplex T (λ T', T'.const obj 0 ≤ 0) obj],
+    exact tableau.flat_pivot (ne_zero_of_mem_pivot_col hc.1)
+  end)
+
+@[simp] lemma sign_of_max_row_res_set (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1.res_set = T.res_set :=
+(sign_of_max_row_eq_simplex_or_pivot T obj).elim
+  (by simp { contextual := tt })
+  (λ ⟨c, hc⟩, begin
+    rw [res_set, hc.2, simplex, ← res_set_simplex T (λ T', T'.const obj 0 ≤ 0) obj],
+    exact tableau.res_set_pivot (ne_zero_of_mem_pivot_col hc.1)
+  end)
+
+@[simp] lemma sign_of_max_row_dead_set (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1.dead_set = T.dead_set :=
+(sign_of_max_row_eq_simplex_or_pivot T obj).elim
+  (by simp { contextual := tt })
+  (λ ⟨c, hc⟩, begin
+    rw [dead_set, hc.2, simplex, ← dead_set_simplex T (λ T', T'.const obj 0 ≤ 0) obj],
+    exact tableau.dead_set_pivot (ne_zero_of_mem_pivot_col hc.1) (pivot_col_spec hc.1).2
+  end)
+
+@[simp] lemma sign_of_max_row_sol_set (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1.sol_set = T.sol_set :=
+by simp [sol_set_eq_res_set_inter_dead_set]
+
+@[simp] lemma restricted_sign_of_max_row (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1.restricted = T.restricted :=
+(sign_of_max_row_eq_simplex_or_pivot T obj).elim
+  (by simp { contextual := tt })
+  (by simp { contextual := tt })
+
+@[simp] lemma dead_sign_of_max_row (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1.dead = T.dead :=
+(sign_of_max_row_eq_simplex_or_pivot T obj).elim
+  (by simp { contextual := tt })
+  (by simp { contextual := tt })
+
+@[simp] lemma undo_stack_sign_of_max_row (T : stableau m n) (obj : fin m) :
+  (sign_of_max_row T obj).1.undo_stack = T.undo_stack :=
+let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+by dsimp [sign_of_max_row]; cases h : T'.2; simp [h, sign_of_max_row._match_1]
+
+lemma feasible_restrict_sign_of_max_row (T : stableau m n) (obj : fin m)
+  (h0 : 0 ≤ (T.sign_of_max_row obj).2) :
+  ((T.sign_of_max_row obj).1.to_tableau.restrict (T.to_partition.rowg obj)).feasible :=
+let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+tableau.feasible_restrict (T.sign_of_max_row obj).1.feasible $
+  let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+  begin
+    cases h : T'.2,
+    { refine or.inr ⟨obj, _⟩,
+      simp [sign_of_max_row, h],
+      exact le_of_not_ge (by simpa using termination_eq_while_iff.1 h) },
+    { refine or.inl ⟨c, _⟩,
+      simp [sign_of_max_row, h] },
+    { refine or.inr ⟨obj, _⟩,
+      simp [sign_of_max_row, h] at *,
+      split_ifs at h0; simp [*, show ¬ (1 : ℤ) ≤ 0, from dec_trivial] at * }
+  end
 
 end sign_of_max_row
 
@@ -426,7 +534,7 @@ begin
   tauto
 end
 
-/-- pivot a row into a column. makes no sens given a dead column -/
+/-- pivot a row into a column. makes no sense given a dead column -/
 def to_row (T : stableau m n) (c : fin n) : stableau m n × option (fin m) :=
 match to_row_pivot_row T c, feasible_to_row_pivot_row c with
 | none, h := (T, none)
@@ -457,14 +565,13 @@ begin
 end
 
 lemma to_row_eq_none {T : stableau m n} {c : fin n} (hdead : c ∉ T.dead): (T.to_row c).2 = none →
-  (c ∈ T.dead ∨ is_unbounded_above T (T.to_partition.colg c)) :=
+  (is_unbounded_above T (T.to_partition.colg c)) :=
 begin
   dsimp [to_row],
   cases h : to_row_pivot_row T c,
   { simp only [h, to_row._match_1],
     dsimp [to_row_pivot_row] at h,
     simp only [true_and, forall_prop_of_true, eq_self_iff_true],
-    right,
     exact is_unbounded_above_colg T.feasible hdead (by simpa [list.filter_eq_nil] using h) },
   { simp [h, to_row._match_1] }
 end
@@ -490,10 +597,6 @@ by rw [to_row_eq_pivot_of_mem hr, to_partition_pivot, colg_swap]
 lemma rowg_to_row_eq_of_mem {T : stableau m n} {r : fin m} {c : fin n} (hr : r ∈ (T.to_row c).2) :
   (T.to_row c).1.to_partition.rowg r = T.to_partition.colg c :=
 by rw [to_row_eq_pivot_of_mem hr, to_partition_pivot, rowg_swap]
-
--- lemma not_dead_of_mem_to_row {T : stableau m n} {r : fin m} {c : fin n} (hr : r ∈ (T.to_row c).2) :
---   c ∉ T.dead :=
--- λ h, by simpa [to_row_snd_eq_to_row_pivot_row, to_row_pivot_row, h] using hr
 
 lemma to_row_eq_self_or_pivot (T : stableau m n) (c : fin n) :
   (T.to_row c).1 = T ∨ ∃ r, T.to_matrix r c ≠ 0 ∧
@@ -542,15 +645,221 @@ row_col_cases_on T.to_partition v (sign_of_max_row T)
     else let (T', r) := T.to_row c in
       option.cases_on r (T', 1) (sign_of_max_row T'))
 
-lemma sign_of_max
+lemma sign_of_max_rowg (T : stableau m n) (r : fin m) :
+  sign_of_max T (T.to_partition.rowg r) = sign_of_max_row T r :=
+by simp [sign_of_max]
+
+lemma sign_of_max_colg_of_dead (T : stableau m n) (c : fin n) (hdead : c ∈ T.dead) :
+  sign_of_max T (T.to_partition.colg c) = (T, 0) :=
+by simp [sign_of_max, hdead]
+
+lemma sign_of_max_colg_of_not_dead (T : stableau m n) (c : fin n) (hdead : c ∉ T.dead) :
+  sign_of_max T (T.to_partition.colg c) = option.cases_on (T.to_row c).2 ((T.to_row c).1, 1)
+  (sign_of_max_row (T.to_row c).1) :=
+by simp [sign_of_max, hdead]; cases (T.to_row c); refl
 
 lemma sign_of_max_eq_zero {T : stableau m n} {v : fin (m + n)} :
   (sign_of_max T v).2 = 0 ↔ ∃ x : cvec (m + n), x v 0 = 0 ∧ is_optimal T x v :=
-begin
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp only [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff];
+      exact ⟨T.of_col 0, by simp [of_col], by simp, λ y hy, by simp [hy.2 c hdead, of_col]⟩
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r,
+      { simp only [h, not_exists, false_iff, not_and, one_ne_zero],
+        exact λ _ _, not_optimal_of_unbounded_above (to_row_eq_none hdead h) },
+      { simp [sign_of_max_row_eq_zero, to_row_eq_pivot_of_mem h, is_optimal, tableau.is_optimal,
+          sol_set_pivot (ne_zero_of_mem_to_row h) hdead] }
+    end)
 
+lemma sign_of_max_eq_one {T : stableau m n} {v : fin (m + n)} :
+  (sign_of_max T v).2 = 1 ↔ ∃ x : cvec (m + n), x ∈ sol_set T ∧ 0 < x v 0 :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_one])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp only [sign_of_max_colg_of_dead T c hdead, hc, zero_ne_one, false_iff,
+        not_exists, not_and, not_lt];
+      exact λ x hx, by rw [hx.2 _ hdead]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r,
+      { cases to_row_eq_none hdead h 1 with x hx,
+        simp only [hc, true_iff, eq_self_iff_true],
+        use [x, hx.1],
+        exact lt_of_lt_of_le zero_lt_one hx.2 },
+      { simp [h, sign_of_max_row_eq_one, rowg_to_row_eq_of_mem h, sol_set_to_row _ _ hdead] }
+    end)
 
-end
+lemma sign_of_max_eq_neg_one {T : stableau m n} {v : fin (m + n)} :
+  (sign_of_max T v).2 = -1 ↔ ∀ x : cvec (m + n), x ∈ sol_set T → x v 0 < 0 :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_neg_one])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp only [hc, sign_of_max_colg_of_dead _ _ hdead, eq_neg_iff_add_eq_zero,
+        classical.not_forall,exists_prop, not_lt,zero_add, one_ne_zero, false_iff];
+      exact ⟨T.of_col 0, by simp [of_col]⟩
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead T c hdead],
+      cases h : (T.to_row c).2 with r,
+      { simpa [sol_set, hc, false_iff, show (1 : ℤ) ≠ -1, by norm_num,
+          classical.not_forall, not_lt, exists_prop] using to_row_eq_none hdead h 0 },
+      { simp [h, sign_of_max_row_eq_neg_one, rowg_to_row_eq_of_mem h, sol_set_to_row _ _ hdead] }
+    end)
+
+lemma feasible_restrict_sign_of_max {T : stableau m n} {v : fin (m + n)}
+  (h0 : 0 ≤ (sign_of_max T v).2) : ((T.sign_of_max v).1.to_tableau.restrict v).feasible :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by rw [hr, sign_of_max_rowg] at ⊢ h0;
+    exact feasible_restrict_sign_of_max_row _ _ h0)
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by rw [hc, sign_of_max_colg_of_dead _ _ hdead] at ⊢ h0;
+      exact tableau.feasible_restrict T.feasible (or.inl ⟨c, rfl⟩)
+    else begin
+      rw [hc, sign_of_max_colg_of_not_dead _ _ hdead] at ⊢ h0,
+      cases h : (T.to_row c).2 with r,
+      { exact tableau.feasible_restrict (stableau.feasible _)
+          (or.inl ⟨c, by simp [to_row_eq_none_iff_eq_self.1 h]⟩) },
+      { have : T.to_partition.colg c = (T.to_row c).1.to_partition.rowg r,
+        { simp [to_row_eq_pivot_of_mem h] },
+        rw this,
+        exact feasible_restrict_sign_of_max_row _ _ (by rwa h at h0) }
+    end)
+
+@[simp] lemma restricted_sign_of_max (T : stableau m n) (v : fin (m + n)) :
+  (T.sign_of_max v).1.restricted = T.restricted :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r,
+      { simp [h, not_exists, false_iff, not_and, one_ne_zero] },
+      { simp [sign_of_max_row_eq_zero, to_row_eq_pivot_of_mem h, is_optimal, tableau.is_optimal,
+          sol_set_pivot (ne_zero_of_mem_to_row h) hdead] }
+    end)
+
+@[simp] lemma dead_sign_of_max (T : stableau m n) (v : fin (m + n)) :
+  (T.sign_of_max v).1.dead = T.dead :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r,
+      { simp [h, not_exists, false_iff, not_and, one_ne_zero] },
+      { simp [sign_of_max_row_eq_zero, to_row_eq_pivot_of_mem h, is_optimal, tableau.is_optimal,
+          sol_set_pivot (ne_zero_of_mem_to_row h) hdead] }
+    end)
+
+@[simp] lemma undo_stack_sign_of_max (T : stableau m n) (v : fin (m + n)) :
+  (T.sign_of_max v).1.undo_stack = T.undo_stack :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r,
+      { simp [h, not_exists, false_iff, not_and, one_ne_zero] },
+      { simp [sign_of_max_row_eq_zero, to_row_eq_pivot_of_mem h, is_optimal, tableau.is_optimal,
+          sol_set_pivot (ne_zero_of_mem_to_row h) hdead] }
+    end)
+
+@[simp] lemma flat_sign_of_max (T : stableau m n) (v : fin (m + n)) :
+  (T.sign_of_max v).1.flat = T.flat :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r,
+      { simp [h, not_exists, false_iff, not_and, one_ne_zero] },
+      { simp [sign_of_max_row_eq_zero, to_row_eq_pivot_of_mem h, is_optimal, tableau.is_optimal,
+          sol_set_pivot (ne_zero_of_mem_to_row h) hdead] }
+    end)
+
+@[simp] lemma dead_set_sign_of_max (T : stableau m n) (v : fin (m + n)) :
+  (T.sign_of_max v).1.dead_set = T.dead_set :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r; simp [h, dead_set_to_row _ _ hdead]
+    end)
+
+@[simp] lemma res_set_sign_of_max (T : stableau m n) (v : fin (m + n)) :
+  (T.sign_of_max v).1.res_set = T.res_set :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r; simp [h, dead_set_to_row _ _ hdead]
+    end)
+
+@[simp] lemma sol_set_sign_of_max (T : stableau m n) (v : fin (m + n)) :
+  (T.sign_of_max v).1.sol_set = T.sol_set :=
+(eq_rowg_or_colg T.to_partition v).elim
+  (λ ⟨r, hr⟩, by simp [sign_of_max_rowg, hr, sign_of_max_row_eq_zero])
+  (λ ⟨c, hc⟩, if hdead : c ∈ T.dead
+    then by simp [sign_of_max_colg_of_dead T c hdead, hc, eq_self_iff_true, true_iff]
+    else begin
+      simp only [hc, sign_of_max_colg_of_not_dead _ _ hdead],
+      cases h : (T.to_row c).2 with r; simp [h, sol_set_to_row _ _ hdead]
+    end)
 
 end sign_of_max
+
+section kill_col
+
+variable (T : stableau m n)
+
+def kill_col (c : fin n) : stableau m n :=
+{ to_tableau := T.to_tableau.kill_col c,
+  undo_stack := revive_col c.1 :: T.undo_stack,
+  feasible   := T.feasible }
+
+@[simp] lemma to_matrix_kill_col (c : fin n) :
+  (T.kill_col c).to_matrix = T.to_matrix := rfl
+
+@[simp] lemma const_kill_col (c : fin n) : (T.kill_col c).const = T.const := rfl
+
+@[simp] lemma to_partition_kill_col (c : fin n) :
+  (T.kill_col c).to_partition = T.to_partition := rfl
+
+@[simp] lemma dead_kill_col (c : fin n) : (T.kill_col c).dead = insert c T.dead := rfl
+
+@[simp] lemma restricted_kill_col (c : fin n) :
+  (T.kill_col c).restricted = T.restricted := rfl
+
+@[simp] lemma flat_kill_col (c : fin n) : (T.kill_col c).flat = T.flat :=
+T.to_tableau.flat_kill_col
+
+@[simp] lemma res_set_kill_col (c : fin n) : (T.kill_col c).res_set = T.res_set :=
+T.to_tableau.res_set_kill_col
+
+@[simp] lemma dead_set_kill_col (c : fin n) : (T.kill_col c).dead_set =
+  T.dead_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
+T.to_tableau.dead_set_kill_col
+
+lemma sol_set_kill_col (c : fin n) : (T.kill_col c).sol_set =
+  T.sol_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
+T.to_tableau.sol_set_kill_col
+
+end kill_col
+
+section close_row
+
+
+
+end close_row
 
 end stableau
