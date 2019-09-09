@@ -73,20 +73,28 @@ begin
     simp [*, fin.find_eq_some_iff] at * }
 end
 
+lemma pivot_col_eq_none_aux {T : tableau m n} {obj : fin m} (hT : T.feasible) {c : fin n} :
+  pivot_col T obj = none → c ∉ T.dead →
+  ((T.to_matrix obj c = 0 ∧ T.to_partition.colg c ∉ T.restricted)
+    ∨ (T.to_matrix obj c ≤ 0 ∧ T.to_partition.colg c ∈ T.restricted)) :=
+begin
+  simp only [pivot_col],
+  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted
+    ∧ c ∉ T.dead),
+  { simp only [list.filter_eq_nil, list.argmin_eq_none, not_and', list.mem_fin_range,
+      true_implies_iff, not_lt, fin.find_eq_none_iff, and_imp, not_not] at *,
+    assume hnonneg hdead,
+    by_cases hres : T.to_partition.colg c ∈ T.restricted; simp * at * },
+  { simp }
+end
+
 lemma pivot_col_eq_none {T : tableau m n} {obj : fin m} (hT : T.feasible)
   (h : pivot_col T obj = none) : T.is_optimal (T.of_col 0) (T.to_partition.rowg obj) :=
 is_optimal_of_col_zero hT
-begin
-  revert h,
-  simp [pivot_col],
-  cases h : fin.find (λ c : fin n, T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted
-    ∧ c ∉ T.dead),
-  { simp only [list.filter_eq_nil, forall_prop_of_true, list.argmin_eq_none,
-      list.mem_fin_range, not_and, not_not, fin.find_eq_none_iff] at *,
-    assume hj j hdead,
-    exact ⟨le_of_not_gt (λ h0, hdead (hj j h0)), by finish⟩ },
-  { simp [h] }
-end
+(λ j hj, begin
+  have := pivot_col_eq_none_aux hT h hj,
+  finish [lt_irrefl]
+end)
 
 lemma pivot_row_spec {T : tableau m n} {obj r : fin m} {c : fin n} :
   r ∈ pivot_row T obj c →

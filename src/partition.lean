@@ -408,7 +408,7 @@ def add_row (B : partition m n) : partition (m + 1) n :=
       cases B.mem_row_indices_or_col_indices ⟨v, hv⟩; simp * }
   end }
 
-lemma add_row_rowg_last (B : partition m n) : B.add_row.rowg (fin.last _) = fin.lastp :=
+lemma add_row_rowg_last (B : partition m n) : B.add_row.rowg (fin.last m) = fin.lastp :=
 have (fin.last m).1 = (B.row_indices.map fin.castp).to_list.length := by simp [fin.last],
 option.some_inj.1 $ by simp only [add_row, rowg, vector.nth_eq_nth_le, vector.to_list_append,
   (list.nth_le_nth _).symm, list.nth_concat_length, this, vector.to_list_mk]; refl

@@ -11,13 +11,13 @@ local postfix `ᵀ` : 1500 := transpose
 @[derive _root_.decidable_eq] inductive undo : Type
 | unrestrict : ℕ → undo
 | revive_col : ℕ → undo
-| delete     : ℕ → undo
+| delete_row : ℕ → undo
 
 instance : has_repr undo :=
 ⟨λ u, undo.cases_on u
   (λ n, "unrestrict " ++ repr n)
-  (λ n, "revive " ++ repr n)
-  (λ n, "delete " ++ repr n)⟩
+  (λ n, "revive_col " ++ repr n)
+  (λ n, "delete_row " ++ repr n)⟩
 
 open undo
 
@@ -231,7 +231,7 @@ lemma add_row_aux_feasible {T : tableau m n} (hfT : T.feasible) (fac : rvec (m +
       {contextual := tt}) i
 
 def add_row (T : stableau m n) (fac : rvec (m + n)) (k : ℚ) : stableau (m + 1) n :=
-{ undo_stack := delete m :: T.undo_stack,
+{ undo_stack := delete_row (m + n) :: T.undo_stack,
   feasible := add_row_aux_feasible T.feasible _ _,
   ..add_row_aux T.to_tableau fac k }
 
@@ -256,7 +256,7 @@ add_row_aux_restricted _ _ _
   (add_row T fac k).dead = T.dead := rfl
 
 lemma minor_mem_flat_of_mem_add_row_flat {T : stableau m n} {fac : rvec (m + n)} {k : ℚ}
-  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).flat → minor x fin.castp id ∈ T.flat :=
+  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).flat → minor x fin.castp (λ x, x) ∈ T.flat :=
 begin
   rw [mem_flat_iff, mem_flat_iff],
   intros h r,
@@ -267,7 +267,7 @@ begin
 end
 
 lemma minor_mem_res_set_of_mem_add_row_res_set {T : stableau m n} {fac : rvec (m + n)} {k : ℚ}
-  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).res_set → minor x fin.castp id ∈ T.res_set :=
+  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).res_set → minor x fin.castp (λ x, x) ∈ T.res_set :=
 and_implies minor_mem_flat_of_mem_add_row_flat begin
   assume h v,
   simp only [set.mem_set_of_eq, add_row_restricted, mem_image, exists_imp_distrib] at h,
@@ -275,46 +275,46 @@ and_implies minor_mem_flat_of_mem_add_row_flat begin
 end
 
 lemma minor_mem_dead_set_of_mem_add_row_dead_set {T : stableau m n} {fac : rvec (m + n)} {k : ℚ}
-  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).dead_set → minor x fin.castp id ∈ T.dead_set :=
+  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).dead_set → minor x fin.castp (λ x, x) ∈ T.dead_set :=
 and_implies minor_mem_flat_of_mem_add_row_flat $
   by simp only [add_row_colg, add_row_to_partition];
   exact id
 
 lemma minor_mem_sol_set_of_mem_add_row_sol_set {T : stableau m n} {fac : rvec (m + n)} {k : ℚ}
-  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).sol_set → minor x fin.castp id ∈ T.sol_set :=
+  {x : cvec (m + 1 + n)} : x ∈ (T.add_row fac k).sol_set → minor x fin.castp (λ x, x) ∈ T.sol_set :=
 by rw [sol_set_eq_res_set_inter_dead_set, sol_set_eq_res_set_inter_dead_set];
   exact and_implies minor_mem_res_set_of_mem_add_row_res_set
     minor_mem_dead_set_of_mem_add_row_dead_set
 
-lemma add_row_new_eq_sum_fac (T : stableau m n) (fac : rvec (m + n)) (k : ℚ)
-  (x : cvec (m + 1 + n)) (hx : x ∈ (T.add_row fac k).flat) :
-  x fin.lastp 0 = univ.sum (λ v : fin (m + n), fac 0 v * x (fin.castp v) 0) + k :=
-calc x fin.lastp 0 = x ((T.add_row fac k).to_partition.rowg (fin.last _)) 0 :
-  by simp [add_row_rowg_last]
-... = univ.sum (λ j : fin n, _) + (T.add_row fac k).const _ _ : mem_flat_iff.1 hx _
-... = k +
-  univ.sum (λ j, (fac 0 (T.to_partition.colg j) * x (T.to_partition.add_row.colg j) 0)) +
+lemma sum_colg_eq_sum_fac {T : stableau m n} {fac : rvec (m + n)} {k : ℚ} {x : cvec (m + n)}
+  (hx : x ∈ T.flat) : univ.sum (λ j : fin n, (T.add_row fac k).to_matrix (fin.last _) j *
+    x (T.to_partition.colg j) 0) + (T.add_row fac k).const (fin.last _) 0 =
+      univ.sum (λ v : fin (m + n), fac 0 v * x v 0) + k :=
+calc univ.sum (λ j : fin n, (T.add_row fac k).to_matrix (fin.last _) j *
+      x (T.to_partition.colg j) 0) + (T.add_row fac k).const (fin.last _) 0
+    = k +
+  univ.sum (λ j, (fac 0 (T.to_partition.colg j) * x (T.to_partition.colg j) 0)) +
   (univ.sum (λ j, univ.sum (λ i, fac 0 (T.to_partition.rowg i) * T.to_matrix i j *
-      x (T.to_partition.add_row.colg j) 0))
+      x (T.to_partition.colg j) 0))
     + univ.sum (λ i, fac 0 (T.to_partition.rowg i) * T.const i 0)) :
   by simp [add_row_to_matrix, add_row_const, fin.last, add_mul, sum_add_distrib, sum_mul]
 ... = k +
-  univ.sum (λ j, (fac 0 (T.to_partition.colg j) * x (T.to_partition.add_row.colg j) 0)) +
+  univ.sum (λ j, (fac 0 (T.to_partition.colg j) * x (T.to_partition.colg j) 0)) +
   (univ.sum (λ i, univ.sum (λ j, fac 0 (T.to_partition.rowg i) * T.to_matrix i j *
-    x (T.to_partition.add_row.colg j) 0))
+    x (T.to_partition.colg j) 0))
     + univ.sum (λ i, fac 0 (T.to_partition.rowg i) * T.const i 0)) : by rw [sum_comm]
 ... = k +
-  univ.sum (λ j, (fac 0 (T.to_partition.colg j) * x (T.to_partition.add_row.colg j) 0)) +
-  univ.sum (λ i : fin m, (fac 0 (T.to_partition.rowg i) * x (fin.castp (T.to_partition.rowg i)) 0)) :
+  univ.sum (λ j, (fac 0 (T.to_partition.colg j) * x (T.to_partition.colg j) 0)) +
+  univ.sum (λ i : fin m, (fac 0 (T.to_partition.rowg i) * x (T.to_partition.rowg i) 0)) :
 begin
   rw [← sum_add_distrib],
-  have : ∀ r : fin m, x (fin.castp (T.to_partition.rowg r)) 0 =
-    sum univ (λ (c : fin n), T.to_matrix r c * x (fin.castp (T.to_partition.colg c)) 0) +
-    T.const r 0, from mem_flat_iff.1 (minor_mem_flat_of_mem_add_row_flat hx),
+  have : ∀ r : fin m, x (T.to_partition.rowg r) 0 =
+    sum univ (λ (c : fin n), T.to_matrix r c * x (T.to_partition.colg c) 0) +
+    T.const r 0, from mem_flat_iff.1 hx,
   simp [this, mul_add, add_row_colg, mul_sum, mul_assoc]
 end
-... = ((univ.image T.to_partition.colg).sum (λ v, (fac 0 v * x (fin.castp v) 0)) +
-  (univ.image T.to_partition.rowg).sum (λ v, (fac 0 v * x (fin.castp v) 0))) + k :
+... = ((univ.image T.to_partition.colg).sum (λ v, (fac 0 v * x v 0)) +
+  (univ.image T.to_partition.rowg).sum (λ v, (fac 0 v * x v 0))) + k :
   by rw [sum_image, sum_image];
     simp [add_row_rowg_cast_succ, add_row_colg, T.to_partition.injective_rowg.eq_iff,
       T.to_partition.injective_colg.eq_iff]
@@ -323,6 +323,46 @@ end
   congr,
   simpa [finset.ext, eq_comm] using T.to_partition.eq_rowg_or_colg,
   { simp [finset.ext, eq_comm, T.to_partition.rowg_ne_colg] {contextual := tt} }
+end
+
+lemma add_row_new_eq_sum_fac {T : stableau m n} {fac : rvec (m + n)} {k : ℚ}
+  {x : cvec (m + 1 + n)} (hx : x ∈ (T.add_row fac k).flat) :
+  x fin.lastp 0 = univ.sum (λ v : fin (m + n), fac 0 v * x (fin.castp v) 0) + k :=
+calc x fin.lastp 0 = x ((T.add_row fac k).to_partition.rowg (fin.last _)) 0 :
+  by simp [add_row_rowg_last]
+... = univ.sum (λ j : fin n, _) + (T.add_row fac k).const _ _ : mem_flat_iff.1 hx _
+... = univ.sum (λ v : fin (m + n), fac 0 v * x (fin.castp v) 0) + k :
+  by erw ← sum_colg_eq_sum_fac (minor_mem_flat_of_mem_add_row_flat hx);
+  simp [minor, add_row_colg, id.def (0 : fin 1)]
+
+lemma flat_add_row (T : stableau m n) (fac : rvec (m + n)) (k : ℚ) :
+  (T.add_row fac k).flat = (λ x, minor x fin.castp (λ x, x)) ⁻¹' T.flat ∩
+  {x : cvec (m + 1 + n) |
+    x fin.lastp 0 = univ.sum (λ v : fin (m + n), fac 0 v * x (fin.castp v) 0) + k} :=
+set.ext $ λ x, ⟨λ hx, ⟨minor_mem_flat_of_mem_add_row_flat hx, add_row_new_eq_sum_fac hx⟩,
+  λ h, mem_flat_iff.2 (λ r, begin
+    refine fin.cases_last _ _ r,
+    { erw [add_row_to_partition, add_row_rowg_last, show _ = _, from h.2,
+        ← sum_colg_eq_sum_fac h.1],
+      simp [minor, add_row_colg] },
+    { assume i,
+      have := mem_flat_iff.1 h.1 i,
+      simp [add_row_to_matrix, dif_pos (show i.cast_succ.val < m, from i.2),
+        add_row_to_partition, add_row_rowg_cast_succ, minor, *, add_row_const, add_row_colg] at * }
+  end)⟩
+
+lemma res_set_add_row (T : stableau m n) (fac : rvec (m + n)) (k : ℚ) :
+  (T.add_row fac k).res_set = (λ x, minor x fin.castp (λ x, x)) ⁻¹' T.res_set ∩
+  {x : cvec (m + 1 + n) |
+    x fin.lastp 0 = univ.sum (λ v : fin (m + n), fac 0 v * x (fin.castp v) 0) + k} :=
+begin
+  erw [res_set, tableau.res_set, ← stableau.flat, flat_add_row],
+  simp [set.ext_iff, minor, add_row_restricted, res_set, tableau.res_set, flat, mem_flat_iff],
+  intro,
+  split,
+  simp {contextual := tt},
+
+
 end
 
 end add_row
@@ -352,6 +392,30 @@ match T'.2, sign_of_max_row_feasible obj T.feasible with
 end
 
 set_option eqn_compiler.zeta false
+
+lemma optimal_and_neg_of_sign_of_max_row_eq_zero {T : stableau m n} {obj : fin m} :
+  (sign_of_max_row T obj).2 = 0 →
+  let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+  T'.2 = optimal ∧
+  ∀ c : fin n, c ∉ T'.1.dead →
+  (((sign_of_max_row T obj).1.to_matrix obj c = 0 ∧
+      (sign_of_max_row T obj).1.to_partition.colg c ∉ (sign_of_max_row T obj).1.restricted)
+    ∨ ((sign_of_max_row T obj).1.to_matrix obj c ≤ 0 ∧
+      (sign_of_max_row T obj).1.to_partition.colg c ∈ (sign_of_max_row T obj).1.restricted)) :=
+let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+begin
+  cases h : T'.2 with c,
+  { simp [sign_of_max_row, *, termination_eq_while_iff, is_optimal_iff, classical.not_forall] at * },
+  { simp [sign_of_max_row, *] },
+  { simp only [sign_of_max_row, *, eq_self_iff_true, true_and],
+    split_ifs,
+    { simp only [eq_self_iff_true, true_implies_iff],
+      assume c hc,
+      exact (pivot_col_eq_none_aux feasible_simplex
+        (termination_eq_optimal_iff_pivot_col_eq_none.1 h).2
+          (show c ∉ T'.1.dead, by simpa using hc)) },
+    { simp [show (-1 : ℤ) ≠ 0, from dec_trivial], } }
+end
 
 lemma sign_of_max_row_eq_zero {T : stableau m n} {obj : fin m} :
   (sign_of_max_row T obj).2 = 0 ↔
@@ -509,6 +573,17 @@ tableau.feasible_restrict (T.sign_of_max_row obj).1.feasible $
       simp [sign_of_max_row, h] at *,
       split_ifs at h0; simp [*, show ¬ (1 : ℤ) ≤ 0, from dec_trivial] at * }
   end
+
+lemma rowg_sign_of_max_row_of_le_zero {T : stableau m n} {obj : fin m}
+  (h1 : (T.sign_of_max_row obj).2 ≤ 0) :
+  (T.sign_of_max_row obj).1.to_partition.rowg obj = T.to_partition.rowg obj :=
+let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+by cases h : T'.2; simp [sign_of_max_row, *, show ¬ (1 : ℤ) ≤ 0, from dec_trivial] at *
+
+lemma const_sign_of_max_row_eq_zero_of_eq_zero {T : stableau m n} {obj : fin m}
+  (h : (T.sign_of_max_row obj).2 = 0) : (T.sign_of_max_row obj).1.const obj 0 = 0 :=
+let T' := T.simplex (λ T', T'.const obj 0 ≤ 0) obj in
+by cases h : T'.2; simp [sign_of_max_row, *] at *; split_ifs at *; simp * at *
 
 end sign_of_max_row
 
@@ -818,48 +893,150 @@ lemma feasible_restrict_sign_of_max {T : stableau m n} {v : fin (m + n)}
 
 end sign_of_max
 
-section kill_col
+-- section kill_col
 
-variable (T : stableau m n)
+-- variable (T : stableau m n)
 
-def kill_col (c : fin n) : stableau m n :=
-{ to_tableau := T.to_tableau.kill_col c,
-  undo_stack := revive_col c.1 :: T.undo_stack,
-  feasible   := T.feasible }
+-- def kill_col (c : fin n) : stableau m n :=
+-- { to_tableau := T.to_tableau.kill_col c,
+--   undo_stack := revive_col c.1 :: T.undo_stack,
+--   feasible   := T.feasible }
 
-@[simp] lemma to_matrix_kill_col (c : fin n) :
-  (T.kill_col c).to_matrix = T.to_matrix := rfl
+-- @[simp] lemma to_matrix_kill_col (c : fin n) :
+--   (T.kill_col c).to_matrix = T.to_matrix := rfl
 
-@[simp] lemma const_kill_col (c : fin n) : (T.kill_col c).const = T.const := rfl
+-- @[simp] lemma const_kill_col (c : fin n) : (T.kill_col c).const = T.const := rfl
 
-@[simp] lemma to_partition_kill_col (c : fin n) :
-  (T.kill_col c).to_partition = T.to_partition := rfl
+-- @[simp] lemma to_partition_kill_col (c : fin n) :
+--   (T.kill_col c).to_partition = T.to_partition := rfl
 
-@[simp] lemma dead_kill_col (c : fin n) : (T.kill_col c).dead = insert c T.dead := rfl
+-- @[simp] lemma dead_kill_col (c : fin n) : (T.kill_col c).dead = insert c T.dead := rfl
 
-@[simp] lemma restricted_kill_col (c : fin n) :
-  (T.kill_col c).restricted = T.restricted := rfl
+-- @[simp] lemma restricted_kill_col (c : fin n) :
+--   (T.kill_col c).restricted = T.restricted := rfl
 
-@[simp] lemma flat_kill_col (c : fin n) : (T.kill_col c).flat = T.flat :=
-T.to_tableau.flat_kill_col
+-- @[simp] lemma flat_kill_col (c : fin n) : (T.kill_col c).flat = T.flat :=
+-- tableau.flat_kill_col _
 
-@[simp] lemma res_set_kill_col (c : fin n) : (T.kill_col c).res_set = T.res_set :=
-T.to_tableau.res_set_kill_col
+-- @[simp] lemma res_set_kill_col (c : fin n) : (T.kill_col c).res_set = T.res_set :=
+-- tableau.res_set_kill_col _
 
-@[simp] lemma dead_set_kill_col (c : fin n) : (T.kill_col c).dead_set =
-  T.dead_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
-T.to_tableau.dead_set_kill_col
+-- @[simp] lemma dead_set_kill_col (c : fin n) : (T.kill_col c).dead_set =
+--   T.dead_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
+-- tableau.dead_set_kill_col _
 
-lemma sol_set_kill_col (c : fin n) : (T.kill_col c).sol_set =
-  T.sol_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
-T.to_tableau.sol_set_kill_col
+-- lemma sol_set_kill_col (c : fin n) : (T.kill_col c).sol_set =
+--   T.sol_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
+-- tableau.sol_set_kill_col _
 
-end kill_col
+-- end kill_col
+
+section restrict
+
+def restrict (T : stableau m n) (v : fin (m + n))
+  (h : (T.to_tableau.restrict v).feasible) :
+  stableau m n :=
+{ to_tableau := T.to_tableau.restrict v,
+  feasible := h,
+  undo_stack := unrestrict v.1 :: T.undo_stack }
+
+
+
+end restrict
 
 section close_row
 
+/-- Only to be used immediately after `sign_of_max_row` -/
+def close_row (T : stableau m n) (r : fin m) : stableau m n :=
+let s : list (fin n) := (list.fin_range n).filter (λ c, T.to_matrix r c < 0) in
+{ dead := T.dead ∪ ⟨s, list.nodup_filter _ (list.nodup_fin_range _)⟩,
+  undo_stack := s.map (λ c, revive_col c.val) ++ T.undo_stack,
+  ..T }
 
+@[simp] lemma to_matrix_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).to_matrix = T.to_matrix := rfl
+
+@[simp] lemma const_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).const = T.const := rfl
+
+@[simp] lemma to_partition_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).to_partition = T.to_partition := rfl
+
+@[simp] lemma restricted_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).restricted = T.restricted := rfl
+
+lemma dead_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).dead = T.dead ∪ univ.filter (λ c, T.to_matrix r c < 0) :=
+by simp [finset.ext, close_row]
+
+lemma undo_stack_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).undo_stack = ((list.fin_range n).filter (λ c, T.to_matrix r c < 0)).map
+    (λ c, revive_col c.val) ++ T.undo_stack := rfl
+
+@[simp] lemma flat_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).flat = T.flat := rfl
+
+@[simp] lemma res_set_close_row (T : stableau m n) (r : fin m) :
+  (T.close_row r).res_set = T.res_set := rfl
+
+lemma sol_set_close_row_subset (T : stableau m n) (r : fin m) :
+  (T.close_row r).sol_set ⊆ T.sol_set :=
+λ _, by simp [sol_set, tableau.sol_set, tableau.res_set, close_row, tableau.flat] {contextual := tt}
+
+/-- Belongs in mathlib -/
+lemma sum_eq_zero_iff_of_nonpos {α β : Type*} [ordered_comm_monoid β] {f : α → β} {s : finset α} :
+  (∀x∈s, f x ≤ 0) → (s.sum f = 0 ↔ ∀x∈s, f x = 0) := sorry
+
+lemma sol_set_close_row_sign_of_max_row (T : stableau m n) (r : fin m)
+  (hres : (T.sign_of_max_row r).1.to_partition.rowg r ∈ T.restricted)
+  (h0 : (T.sign_of_max_row r).2 = 0) :
+  ((T.sign_of_max_row r).1.close_row r).sol_set = T.sol_set :=
+have hsub : ((T.sign_of_max_row r).1.close_row r).sol_set ⊆ T.sol_set,
+  by simpa using sol_set_close_row_subset (sign_of_max_row T r).1 r,
+set.subset.antisymm hsub
+  (λ x hx, begin
+    rw [← sign_of_max_row_sol_set _ r] at hx,
+    refine ⟨hx.1, λ c hc, _⟩,
+    rw [dead_close_row, finset.mem_union, finset.mem_filter] at hc,
+    cases hc with hc hc,
+    { simpa using hx.2 _ hc },
+    { cases sign_of_max_row_eq_zero.1 h0 with y hy,
+      { have hx0 : x ((sign_of_max_row T r).fst.to_partition.rowg r) 0 = 0,
+          from le_antisymm (le_trans begin
+            rw [rowg_sign_of_max_row_of_le_zero],
+            exact hy.2.2 x (by simpa using hx),
+            simp * at *
+          end
+            (le_of_eq hy.1))
+          (hx.1.2 _ (by simpa using hres)),
+        have hc'0 : ∀ c', (sign_of_max_row T r).fst.to_matrix r c' *
+          x ((sign_of_max_row T r).fst.to_partition.colg c') 0 ≤ 0,
+        { assume c',
+          by_cases hdead : c' ∈ T.dead,
+          { have := hx.2 c', simp * at * },
+          { cases (optimal_and_neg_of_sign_of_max_row_eq_zero h0).2 c'
+              (by simpa using hdead) with h h,
+            { simp [h.1] },
+            { exact mul_nonpos_of_nonpos_of_nonneg h.1 (hx.1.2 _ h.2) } } },
+        rw [mem_flat_iff.1 hx.1.1, const_sign_of_max_row_eq_zero_of_eq_zero h0, add_zero] at hx0,
+        exact (mul_eq_zero.1 ((sum_eq_zero_iff_of_nonpos (λ c hc, hc'0 c)).1 hx0 _
+            (mem_univ c))).resolve_left
+          (ne_of_lt hc.2) } }
+  end)
 
 end close_row
+
+section assert_ge
+
+def assert_ge (T : stableau m n) (fac : rvec (m + n)) (k : ℚ) : stableau (m + 1) n × bool :=
+let T' := sign_of_max (T.add_row fac k) fin.lastp in
+if hneg : T'.2 < 0 then (T'.1, ff)
+  else if T'.2 = 0 then (T'.1.close_row $ fin.last _, tt)
+    else (T'.1.restrict fin.lastp (feasible_restrict_sign_of_max $ le_of_not_gt hneg), tt)
+
+lemma flat_assert_ge (T : stableau m n) (fac : rvec (m + n)) (k : ℚ) :
+  (T.assert_ge fac k).1.flat = T.flat
+
+end assert_ge
 
 end stableau
