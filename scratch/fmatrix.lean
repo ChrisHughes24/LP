@@ -1,4 +1,4 @@
-import data.matrix data.array.lemmas data.rat.basic
+import data.matrix.basic data.array.lemmas data.rat.basic
 
 def fmatrix (m : ℕ) (n : ℕ) := array (m * n) ℚ
 

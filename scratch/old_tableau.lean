@@ -24,10 +24,9 @@ variables {m n : ℕ}
   `to_partition` stores the indices of the current row and column variables.
   `restricted` is the set of variables that are restricted to be nonnegative  -/
 structure tableau (m n : ℕ) extends partition m n :=
-(to_matrix  : matrix (fin m) (fin n) ℚ)
-(const      : cvec m)
+(to_matrix : matrix (fin m) (fin n) ℚ)
+(const : cvec m)
 (restricted : finset (fin (m + n)))
-(dead       : finset (fin n))
 
 namespace tableau
 open partition
@@ -39,42 +38,21 @@ variable (T : tableau m n)
 def flat : set (cvec (m + n)) :=
 { x | T.to_partition.rowp.to_matrix ⬝ x = T.to_matrix ⬝ T.to_partition.colp.to_matrix ⬝ x + T.const }
 
-/-- The res_set is the subset of ℚ^(m+n) that satisifies the nonnegativity constraints of
-  the tableau, and the affine conditions -/
-def res_set : set (cvec (m + n)) := flat T ∩ { x | ∀ i, i ∈ T.restricted → 0 ≤ x i 0 }
+/-- The sol_set is the subset of ℚ^(m+n) that satisifies the tableau -/
+def sol_set : set (cvec (m + n)) := flat T ∩ { x | ∀ i, i ∈ T.restricted → 0 ≤ x i 0 }
 
-/-- The dead_set is the subset of ℚ^(m+n) such that all dead variables are zero, and satisfies
-  the affine conditions -/
-def dead_set : set (cvec (m + n)) :=
-flat T ∩ { x | ∀ j, j ∈ T.dead → x (T.to_partition.colg j) 0 = 0 }
-
-/-- The `sol_set` is the set of vector that satisfy the affine constraints the dead variable
-  constraints, and the nonnegativity constraints. -/
-def sol_set : set (cvec (m + n)) :=
-res_set T ∩ { x | ∀ j, j ∈ T.dead → x (T.to_partition.colg j) 0 = 0 }
-
-lemma sol_set_eq_res_set_inter :
-  T.sol_set = res_set T ∩ { x | ∀ j, j ∈ T.dead → x (T.to_partition.colg j) 0 = 0 } := rfl
-
-lemma sol_set_eq_dead_set_inter :
-   T.sol_set = dead_set T ∩ { x | ∀ i, i ∈ T.restricted → 0 ≤ x i 0 } :=
-set.inter_right_comm _ _ _
-
-lemma sol_set_eq_res_set_inter_dead_set : T.sol_set = T.res_set ∩ T.dead_set :=
-by simp [sol_set, res_set, dead_set, set.ext_iff]; tauto
-
-/-- Predicate for a variable being unbounded above in the `res_set` -/
+/-- Predicate for a variable being unbounded above in the `sol_set` -/
 def is_unbounded_above (i : fin (m + n)) : Prop :=
 ∀ q : ℚ, ∃ x : cvec (m + n), x ∈ sol_set T ∧ q ≤ x i 0
 
-/-- Predicate for a variable being unbounded below in the `res_set` -/
+/-- Predicate for a variable being unbounded below in the `sol_set` -/
 def is_unbounded_below (i : fin (m + n)) : Prop :=
 ∀ q : ℚ, ∃ x : cvec (m + n), x ∈ sol_set T ∧ x i 0 ≤ q
 
 def is_optimal (x : cvec (m + n)) (i : fin (m + n)) : Prop :=
 x ∈ T.sol_set ∧ ∀ y : cvec (m + n), y ∈ sol_set T → y i 0 ≤ x i 0
 
-/-- Is this equivalent to `∀ (x : cvec (m + n)), x ∈ res_set T → x i 0 = x j 0`? No -/
+/-- Is this equivalent to `∀ (x : cvec (m + n)), x ∈ sol_set T → x i 0 = x j 0`? No -/
 def equal_in_flat (i j : fin (m + n)) : Prop :=
 ∀ (x : cvec (m + n)), x ∈ flat T → x i 0 = x j 0
 
@@ -89,7 +67,7 @@ def feasible : Prop :=
 instance : decidable_pred (@feasible m n) := λ _, by dunfold feasible; apply_instance
 
 /-- Given a row index `r` and a column index `s` it returns a tableau with `r` and `s` switched,
-  but with the same `res_set` -/
+  but with the same `sol_set` -/
 def pivot (r : fin m) (c : fin n) : tableau m n :=
 let p := (T.to_matrix r c)⁻¹ in
 { to_matrix := λ i j,
@@ -105,24 +83,12 @@ let p := (T.to_matrix r c)⁻¹ in
     if i = r
       then -T.const r k * p
       else T.const i k - T.to_matrix i c * T.const r k * p,
-  restricted := T.restricted,
-  dead := T.dead }
-
-def restrict (T : tableau m n) (v : fin (m + n)) : tableau m n :=
-{ restricted := insert v T.restricted,
-  ..T }
-
-def kill_col (T : tableau m n) (c : fin n) : tableau m n :=
-{ dead := insert c T.dead,
-  ..T }
+  restricted := T.restricted }
 
 end predicates
 
 section predicate_lemmas
 variable {T : tableau m n}
-
-@[simp] lemma eta : tableau.mk T.to_partition T.to_matrix T.const T.restricted T.dead = T :=
-by cases T; refl
 
 lemma mem_flat_iff {x : cvec (m + n)} : x ∈ T.flat ↔
   ∀ r, x (T.to_partition.rowg r) 0 = univ.sum
@@ -190,11 +156,11 @@ begin
 end
 
 /-- Condition for the solution given by setting column index `j` to `q` and all other columns to
-  zero being in the `res_set` -/
-lemma of_col_single_mem_res_set {q : ℚ} {c : fin n} (hT : T.feasible)
+  zero being in the `sol_set` -/
+lemma of_col_single_mem_sol_set {q : ℚ} {c : fin n} (hT : T.feasible)
   (hi : ∀ i, T.to_partition.rowg i ∈ T.restricted → 0 ≤ q * T.to_matrix i c)
   (hj : T.to_partition.colg c ∉ T.restricted ∨ 0 ≤ q) :
-  T.of_col (q • (single c 0).to_matrix) ∈ T.res_set :=
+  T.of_col (q • (single c 0).to_matrix) ∈ T.sol_set :=
 ⟨of_col_mem_flat _ _,
   λ v, (T.to_partition.eq_rowg_or_colg v).elim
     begin
@@ -210,148 +176,63 @@ lemma of_col_single_mem_res_set {q : ℚ} {c : fin n} (hT : T.feasible)
       by_cases hjc : j = c; simp [*, le_refl] at *
     end⟩
 
-lemma of_col_single_mem_sol_set {q : ℚ} {c : fin n} (hT : T.feasible)
-  (hi : ∀ i, T.to_partition.rowg i ∈ T.restricted → 0 ≤ q * T.to_matrix i c)
-  (hj : T.to_partition.colg c ∉ T.restricted ∨ 0 ≤ q) (hdead : c ∉ T.dead ∨ q = 0):
-  T.of_col (q • (single c 0).to_matrix) ∈ T.sol_set :=
-⟨of_col_single_mem_res_set hT hi hj,
-  λ j hj, classical.by_cases
-    (λ hjc : j = c, by subst hjc; simp * at *)
-    (λ hjc : j ≠ c, by simp [smul_val, pequiv.single, pequiv.to_matrix, hjc])⟩
-
-@[simp] lemma of_col_zero_mem_res_set_iff : T.of_col 0 ∈ T.res_set ↔ T.feasible :=
+@[simp] lemma of_col_zero_mem_sol_set_iff : T.of_col 0 ∈ T.sol_set ↔ T.feasible :=
 suffices (∀ v : fin (m + n), v ∈ T.restricted → (0 : ℚ) ≤ T.of_col 0 v 0) ↔
     (∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.const i 0),
-  by simpa [res_set, feasible, of_col_mem_flat],
+  by simpa [sol_set, feasible, of_col_mem_flat],
 ⟨λ h i hi, by simpa [of_col_rowg] using h _ hi,
   λ h v hv, (T.to_partition.eq_rowg_or_colg v).elim
     (by rintros ⟨i, hi⟩; subst hi; simp [of_col_rowg]; tauto)
     (by rintros ⟨j, hj⟩; subst hj; simp)⟩
 
-@[simp] lemma of_col_zero_mem_sol_set_iff : T.of_col 0 ∈ T.sol_set ↔ T.feasible :=
-by simp [sol_set,  of_col_zero_mem_res_set_iff]
-
-@[simp] lemma to_matrix_restrict (v : fin (m + n)) : (T.restrict v).to_matrix = T.to_matrix := rfl
-
-@[simp] lemma const_restrict (v : fin (m + n)) : (T.restrict v).const = T.const := rfl
-
-@[simp] lemma to_partition_restrict (v : fin (m + n)) :
-  (T.restrict v).to_partition = T.to_partition := rfl
-
-@[simp] lemma dead_restrict (v : fin (m + n)) : (T.restrict v).dead = T.dead := rfl
-
-@[simp] lemma restricted_restrict (v : fin (m + n)) :
-  (T.restrict v).restricted = insert v T.restricted := rfl
-
-@[simp] lemma flat_restrict (v : fin (m + n)) : (T.restrict v).flat = T.flat := by simp [flat]
-
-@[simp] lemma dead_set_restrict (v : fin (m + n)) : (T.restrict v).dead_set = T.dead_set :=
-by simp [dead_set]
-
-lemma res_set_restrict (v : fin (m + n)) : (T.restrict v).res_set =
-  T.res_set ∩ {x | 0 ≤ x v 0} :=
-begin
-  simp only [res_set, flat_restrict, set.inter_assoc],
-  ext x,
-  exact ⟨λ h, ⟨h.1, λ i hi, h.2 _ $ by simp [hi], h.2 _ $ by simp⟩,
-    λ h, ⟨h.1, λ i hi, (mem_insert.1 hi).elim (λ hv, hv.symm ▸ h.2.2) $ h.2.1 _⟩⟩
-end
-
-lemma sol_set_restrict (v : fin (m + n)) : (T.restrict v).sol_set =
-  T.sol_set ∩ {x | 0 ≤ x v 0} :=
-by simp [sol_set_eq_res_set_inter_dead_set, res_set_restrict, set.inter_comm, set.inter_assoc,
-  set.inter_left_comm]
-
-lemma feasible_restrict {v : fin (m + n)} (hfT : T.feasible)
-  (h : (∃ c, v = T.to_partition.colg c) ∨ ∃ r, v = T.to_partition.rowg r ∧  0 ≤ T.const r 0) :
-  (T.restrict v).feasible :=
-h.elim
-  (λ ⟨c, hc⟩, hc.symm ▸ λ i hi, hfT _ $ by simpa using hi)
-  (λ ⟨r, hrv, hr⟩, hrv.symm ▸ λ i hi, (mem_insert.1 hi).elim
-    (λ h, by simp [T.to_partition.injective_rowg.eq_iff, *] at *)
-    (λ hres, hfT _ $ by simpa using hres))
-
-@[simp] lemma to_matrix_kill_col (c : fin n) :
-  (T.kill_col c).to_matrix = T.to_matrix := rfl
-
-@[simp] lemma const_kill_col (c : fin n) : (T.kill_col c).const = T.const := rfl
-
-@[simp] lemma to_partition_kill_col (c : fin n) :
-  (T.kill_col c).to_partition = T.to_partition := rfl
-
-@[simp] lemma dead_kill_col (c : fin n) : (T.kill_col c).dead = insert c T.dead := rfl
-
-@[simp] lemma restricted_kill_col (c : fin n) :
-  (T.kill_col c).restricted = T.restricted := rfl
-
-@[simp] lemma flat_kill_col (c : fin n) : (T.kill_col c).flat = T.flat := by simp [flat]
-
-@[simp] lemma res_set_kill_col (c : fin n) : (T.kill_col c).res_set = T.res_set := by simp [res_set]
-
-@[simp] lemma dead_set_kill_col (c : fin n) : (T.kill_col c).dead_set =
-  T.dead_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
-begin
-  simp only [dead_set, flat_restrict, set.inter_assoc],
-  ext x,
-  exact ⟨λ h, ⟨h.1, λ i hi, h.2 _ $ by simp [hi], h.2 _ $ by simp⟩,
-    λ h, ⟨h.1, λ i hi, (mem_insert.1 hi).elim (λ hv, hv.symm ▸ h.2.2) $ h.2.1 _⟩⟩
-end
-
-lemma sol_set_kill_col (c : fin n) : (T.kill_col c).sol_set =
-  T.sol_set ∩ {x | x (T.to_partition.colg c) 0 = 0} :=
-by simp [sol_set_eq_res_set_inter_dead_set, res_set_restrict, set.inter_comm, set.inter_assoc,
-  set.inter_left_comm]
-
-@[simp] lemma feasible_kill_col_iff {c : fin n} : (T.kill_col c).feasible ↔ T.feasible := iff.rfl
-
-lemma is_unbounded_above_colg_aux {c : fin n} (hT : T.feasible) (hdead : c ∉ T.dead)
-  (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.to_matrix i c) (q : ℚ) :
+lemma is_unbounded_above_colg_aux {c : fin n} (hT : T.feasible)
+  (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.to_matrix i c) (q : ℚ):
   of_col T (max q 0 • (single c 0).to_matrix) ∈ sol_set T ∧
     q ≤ of_col T (max q 0 • (single c 0).to_matrix) (T.to_partition.colg c) 0 :=
 ⟨of_col_single_mem_sol_set hT (λ i hi, mul_nonneg (le_max_right _ _) (h _ hi))
-    (or.inr (le_max_right _ _)) (or.inl hdead),
+    (or.inr (le_max_right _ _)),
   by simp [of_col_colg, smul_val, pequiv.single, pequiv.to_matrix, le_refl q]⟩
 
 /-- A column variable is unbounded above if it is in a column where every negative entry is
   in a row owned by an unrestricted variable -/
-lemma is_unbounded_above_colg {c : fin n} (hT : T.feasible) (hdead : c ∉ T.dead)
+lemma is_unbounded_above_colg {c : fin n} (hT : T.feasible)
   (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.to_matrix i c) :
   T.is_unbounded_above (T.to_partition.colg c) :=
-λ q, ⟨_, is_unbounded_above_colg_aux hT hdead h q⟩
+λ q, ⟨_, is_unbounded_above_colg_aux hT h q⟩
 
 lemma is_unbounded_below_colg_aux {c : fin n} (hT : T.feasible)
-  (hres : T.to_partition.colg c ∉ T.restricted) (hdead : c ∉ T.dead)
+  (hres : T.to_partition.colg c ∉ T.restricted)
   (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → T.to_matrix i c ≤ 0) (q : ℚ) :
   of_col T (min q 0 • (single c 0).to_matrix) ∈ sol_set T ∧
     of_col T (min q 0 • (single c 0).to_matrix) (T.to_partition.colg c) 0 ≤ q :=
 ⟨of_col_single_mem_sol_set hT
     (λ i hi, mul_nonneg_of_nonpos_of_nonpos (min_le_right _ _) (h _ hi))
-    (or.inl hres) (or.inl hdead),
+    (or.inl hres),
   by simp [of_col_colg, smul_val, pequiv.single, pequiv.to_matrix, le_refl q]⟩
 
 /-- A column variable is unbounded below if it is unrestricted and it is in a column where every
   positive entry is in a row owned by an unrestricted variable -/
 lemma is_unbounded_below_colg {c : fin n} (hT : T.feasible)
-  (hres : T.to_partition.colg c ∉ T.restricted) (hdead : c ∉ T.dead)
+  (hres : T.to_partition.colg c ∉ T.restricted)
   (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → T.to_matrix i c ≤ 0) :
   T.is_unbounded_below (T.to_partition.colg c) :=
-λ q, ⟨_, is_unbounded_below_colg_aux hT hres hdead h q⟩
+λ q, ⟨_, is_unbounded_below_colg_aux hT hres h q⟩
 
 /-- A row variable `r` is unbounded above if it is unrestricted and there is a column `s`
   where every restricted row variable has a nonpositive entry in that column, and
   `r` has a negative entry in that column. -/
-lemma is_unbounded_above_rowg_of_nonpos {r : fin m} (hT : T.feasible) (c : fin n)
-  (hres : T.to_partition.colg c ∉ T.restricted) (hdead : c ∉ T.dead)
-  (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → T.to_matrix i c ≤ 0)
-  (his : T.to_matrix r c < 0) : is_unbounded_above T (T.to_partition.rowg r) :=
-λ q, ⟨T.of_col (min ((q - T.const r 0) / T.to_matrix r c) 0 • (single c 0).to_matrix),
+lemma is_unbounded_above_rowg_of_nonpos {r : fin m} (hT : T.feasible) (s : fin n)
+  (hres : T.to_partition.colg s ∉ T.restricted)
+  (h : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → T.to_matrix i s ≤ 0)
+  (his : T.to_matrix r s < 0) : is_unbounded_above T (T.to_partition.rowg r) :=
+λ q, ⟨T.of_col (min ((q - T.const r 0) / T.to_matrix r s) 0 • (single s 0).to_matrix),
   of_col_single_mem_sol_set hT
     (λ i' hi', mul_nonneg_of_nonpos_of_nonpos (min_le_right _ _) (h _ hi'))
-    (or.inl hres) (or.inl hdead),
+    (or.inl hres),
   begin
     rw [of_col_rowg, add_val, matrix.mul_smul, smul_val, matrix_mul_apply,
       symm_single_apply],
-    cases le_total 0 ((q - T.const r 0) / T.to_matrix r c) with hq hq,
+    cases le_total 0 ((q - T.const r 0) / T.to_matrix r s) with hq hq,
     { rw [min_eq_right hq],
       rw [le_div_iff_of_neg his, zero_mul, sub_nonpos] at hq,
       simpa },
@@ -362,17 +243,17 @@ lemma is_unbounded_above_rowg_of_nonpos {r : fin m} (hT : T.feasible) (c : fin n
 /-- A row variable `r` is unbounded above if there is a column `s`
   where every restricted row variable has a nonpositive entry in that column, and
   `r` has a positive entry in that column. -/
-lemma is_unbounded_above_rowg_of_nonneg {r : fin m} (hT : T.feasible) (c : fin n)
-  (hs : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.to_matrix i c) (hdead : c ∉ T.dead)
-  (his : 0 < T.to_matrix r c) : is_unbounded_above T (T.to_partition.rowg r) :=
-λ q, ⟨T.of_col (max ((q - T.const r 0) / T.to_matrix r c) 0 • (single c 0).to_matrix),
+lemma is_unbounded_above_rowg_of_nonneg {r : fin m} (hT : T.feasible) (s : fin n)
+  (hs : ∀ i : fin m, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.to_matrix i s)
+  (his : 0 < T.to_matrix r s) : is_unbounded_above T (T.to_partition.rowg r) :=
+λ q, ⟨T.of_col (max ((q - T.const r 0) / T.to_matrix r s) 0 • (single s 0).to_matrix),
   of_col_single_mem_sol_set hT
     (λ i hi, mul_nonneg (le_max_right _ _) (hs i hi))
-    (or.inr (le_max_right _ _)) (or.inl hdead),
+    (or.inr (le_max_right _ _)),
   begin
     rw [of_col_rowg, add_val, matrix.mul_smul, smul_val, matrix_mul_apply,
       symm_single_apply],
-    cases le_total ((q - T.const r 0) / T.to_matrix r c) 0 with hq hq,
+    cases le_total ((q - T.const r 0) / T.to_matrix r s) 0 with hq hq,
     { rw [max_eq_right hq],
       rw [div_le_iff his, zero_mul, sub_nonpos] at hq,
       simpa },
@@ -384,20 +265,15 @@ lemma is_unbounded_above_rowg_of_nonneg {r : fin m} (hT : T.feasible) (c : fin n
   if every entry in that row is nonpositive and every entry in that row owned by a restricted
   variable is `0`  -/
 lemma is_optimal_of_col_zero {r : fin m} (hf : T.feasible)
-  (h : ∀ j, j ∉ T.dead → T.to_matrix r j ≤ 0 ∧
-    (T.to_partition.colg j ∉ T.restricted → T.to_matrix r j = 0)) :
+  (h : ∀ j, T.to_matrix r j ≤ 0 ∧ (T.to_partition.colg j ∉ T.restricted → T.to_matrix r j = 0)) :
   T.is_optimal (T.of_col 0) (T.to_partition.rowg r) :=
 ⟨of_col_zero_mem_sol_set_iff.2 hf, λ x hx, begin
-  rw [of_col_rowg, matrix.mul_zero, zero_add, mem_flat_iff.1 hx.1.1],
+  rw [of_col_rowg, matrix.mul_zero, zero_add, mem_flat_iff.1 hx.1],
   refine add_le_of_nonpos_of_le _ (le_refl _),
   refine sum_nonpos (λ j _, _),
   by_cases hj : (T.to_partition.colg j) ∈ T.restricted,
-  { by_cases hdead : j ∈ T.dead,
-    { simp [hx.2 _ hdead] },
-    { exact mul_nonpos_of_nonpos_of_nonneg (h _ hdead).1 (hx.1.2 _ hj) } },
-  { by_cases hdead : j ∈ T.dead,
-    { simp [hx.2 _ hdead] },
-    { rw [(h _ hdead).2 hj, zero_mul] } }
+  { refine mul_nonpos_of_nonpos_of_nonneg (h _).1 (hx.2 _ hj) },
+  { rw [(h _).2 hj, _root_.zero_mul] }
 end⟩
 
 lemma not_optimal_of_unbounded_above {v : fin (m + n)} {x : cvec (m + n)}
@@ -520,8 +396,6 @@ by dsimp [pivot]; rw [if_neg hir, div_eq_mul_inv]
 
 @[simp] lemma to_partition_pivot (r s) : (T.pivot r s).to_partition = T.to_partition.swap r s := rfl
 
-@[simp] lemma dead_pivot (r c) : (T.pivot r c).dead = T.dead := rfl
-
 variable {T}
 
 @[simp] lemma flat_pivot {r : fin m} {s : fin n} (hrs : T.to_matrix r s ≠ 0) :
@@ -531,24 +405,9 @@ set.subset.antisymm
     exact subset_flat_pivot (by simp [hrs]))
   (subset_flat_pivot hrs)
 
-@[simp] lemma res_set_pivot {r : fin m} {s : fin n} (hrs : T.to_matrix r s ≠ 0) :
-  (T.pivot r s).res_set = T.res_set :=
-by rw [res_set, flat_pivot hrs]; refl
-
-@[simp] lemma dead_set_pivot {r : fin m} {c : fin n} (hrs : T.to_matrix r c ≠ 0)
-  (hdead : c ∉ T.dead) : (T.pivot r c).dead_set = T.dead_set :=
-begin
-  rw [dead_set, dead_set, flat_pivot hrs],
-  congr,
-  funext x,
-  refine forall_congr_eq (λ j, forall_congr_eq (λ hj, _)),
-  have hjc : j ≠ c, from λ hjc, by simp * at *,
-  simp [colg_swap_of_ne _ hjc]
-end
-
-@[simp] lemma sol_set_pivot {r : fin m} {c : fin n} (hrs : T.to_matrix r c ≠ 0)
-  (hdead : c ∉ T.dead) : (T.pivot r c).sol_set = T.sol_set :=
-by simp [sol_set_eq_dead_set_inter, dead_set_pivot hrs hdead, flat_pivot hrs]
+@[simp] lemma sol_set_pivot {r : fin m} {s : fin n} (hrs : T.to_matrix r s ≠ 0) :
+  (T.pivot r s).sol_set = T.sol_set :=
+by rw [sol_set, flat_pivot hrs]; refl
 
 /-- Two row variables are `equal_in_flat` iff the corresponding rows of the tableau are equal -/
 lemma equal_in_flat_row_row {i i' : fin m} :
@@ -598,7 +457,6 @@ by ext i j; simpa [mul_matrix_apply] using congr_fun (congr_fun (h i) 0) j
 
 lemma ext {T₁ T₂ : tableau m n} (hflat : T₁.flat = T₂.flat)
   (hpartition : T₁.to_partition = T₂.to_partition)
-  (hdead : T₁.dead = T₂.dead)
   (hres : T₁.restricted = T₂.restricted) : T₁ = T₂ :=
 have hconst : T₁.const = T₂.const,
   by rw [set.ext_iff] at hflat; simpa [of_col, flat, hpartition, matrix.mul_assoc,
@@ -623,7 +481,6 @@ end predicate_lemmas
 /-- Conditions for unboundedness based on reading the tableau. The conditions are equivalent to the
   simplex pivot rule failing to find a pivot row. -/
 lemma unbounded_of_tableau {T : tableau m n} {obj : fin m} {c : fin n} (hT : T.feasible)
-  (hdead : c ∉ T.dead)
   (hrow : ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted →
     0 ≤ T.to_matrix obj c / T.to_matrix r c)
   (hc : (T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∉ T.restricted)
@@ -632,7 +489,7 @@ lemma unbounded_of_tableau {T : tableau m n} {obj : fin m} {c : fin n} (hT : T.f
 have hToc : T.to_matrix obj c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hc,
 (lt_or_gt_of_ne hToc).elim
   (λ hToc : T.to_matrix obj c < 0, is_unbounded_above_rowg_of_nonpos hT c
-    (hc.elim and.right (λ h, (not_lt_of_gt hToc h.1).elim)) hdead
+    (hc.elim and.right (λ h, (not_lt_of_gt hToc h.1).elim))
     (λ i hi, classical.by_cases
       (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
       (λ hoi : obj ≠ i, inv_nonpos.1 $ nonpos_of_mul_nonneg_right (hrow _ hoi hi) hToc))
@@ -641,15 +498,15 @@ have hToc : T.to_matrix obj c ≠ 0, from λ h, by simpa [h, lt_irrefl] using hc
     (λ i hi, classical.by_cases
       (λ hoi : obj = i, le_of_lt (hoi ▸ hToc))
       (λ hoi : obj ≠ i, inv_nonneg.1 $ nonneg_of_mul_nonneg_left (hrow _ hoi hi) hToc))
-    hdead hToc)
+    hToc)
 
 /-- Conditions for the tableau being feasible, that must be satisified by a simplex pivot rule -/
 lemma feasible_pivot {T : tableau m n} (hT : T.feasible) {r c}
   (hres : T.to_partition.rowg r ∈ T.restricted)
   (hpos : T.to_partition.colg c ∈ T.restricted → T.to_matrix r c < 0)
   (hrmin : ∀ (i : fin m), T.to_partition.rowg i ∈ T.restricted →
-    0 < T.to_matrix i c / T.to_matrix r c →
-    abs (T.const r 0 / T.to_matrix r c) ≤ abs (T.const i 0 / T.to_matrix i c)) :
+          0 < T.to_matrix i c / T.to_matrix r c →
+          abs (T.const r 0 / T.to_matrix r c) ≤ abs (T.const i 0 / T.to_matrix i c)) :
   (T.pivot r c).feasible :=
 begin
   assume i hi,
@@ -690,26 +547,6 @@ feasible_pivot hT hres (λ hcres, inv_neg'.1 (neg_of_mul_neg_left hrneg (le_of_l
       suffices (T.to_matrix obj c / T.to_matrix r c) / (T.to_matrix i c / T.to_matrix r c) < 0,
         by rwa [div_div_div_cancel_right _ _ hTrc0] at this,
       div_neg_of_neg_of_pos hrneg hir))
-
-/-- Used in sign_of_max -/
-lemma feasible_pivot_obj_of_nonpos {T : tableau m n} {obj : fin m} (hT : T.feasible) {c}
-  (hc : T.to_partition.colg c ∈ T.restricted → 0 < T.to_matrix obj c)
-  (hr : ∀ r, obj ≠ r → T.to_partition.rowg r ∈ T.restricted →
-    0 ≤ T.to_matrix obj c / T.to_matrix r c)
-  (hobj : T.const obj 0 ≤ 0) : feasible (T.pivot obj c) :=
-λ i hi,
-if hiobj : i = obj
-then by rw [hiobj, const_pivot_row, neg_div, neg_nonneg];
-  exact mul_nonpos_of_nonpos_of_nonneg hobj (le_of_lt $ by simp [*, inv_pos'] at *)
-else begin
-  rw [const_pivot_of_ne _ hiobj],
-  rw [to_partition_pivot, rowg_swap_of_ne _ hiobj, restricted_pivot] at hi,
-  refine add_nonneg (hT _ hi) (neg_nonneg.2 _),
-  rw [div_eq_mul_inv, mul_right_comm],
-  exact mul_nonpos_of_nonneg_of_nonpos
-    (inv_nonneg.1 (by simpa [mul_inv'] using hr _ (ne.symm hiobj) hi))
-    hobj
-end
 
 lemma simplex_const_obj_le {T : tableau m n} {obj : fin m} (hT : T.feasible) {r c}
   (hres : T.to_partition.rowg r ∈ T.restricted)

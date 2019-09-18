@@ -1,0 +1,278 @@
+% !TEX TS-program = pdflatex
+% !TEX encoding = UTF-8 Unicode
+
+% This is a simple template for a LaTeX document using the "article" class.
+% See "book", "report", "letter" for other types of document.
+
+\documentclass[11pt]{article} % use larger type; default would be 10pt
+
+%%% Examples of Article customizations
+% These packages are optional, depending whether you want the features they provide.
+% See the LaTeX Companion or other references for full information.
+
+%%% PAGE DIMENSIONS
+\usepackage{geometry} % to change the page dimensions
+\geometry{a4paper} % or letterpaper (US) or a5paper or....
+\geometry{margin=1in} % for example, change the margins to 2 inches all round
+% \geometry{landscape} % set up the page for landscape
+%   read geometry.pdf for detailed page layout information
+
+\usepackage{graphicx} % support the \includegraphics command and options
+
+% \usepackage[parfill]{parskip} % Activate to begin paragraphs with an empty line rather than an indent
+
+\usepackage[utf8x]{inputenc}
+\usepackage{amssymb}
+
+\usepackage{color}
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}   % red
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}   % grey
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}      % green
+
+\usepackage{listings}
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{language=lean}
+
+
+%%% PACKAGES
+\usepackage{inputenc}
+\usepackage{booktabs} % for much better looking tables
+\usepackage{array} % for better arrays (eg matrices) in maths
+\usepackage{paralist} % very flexible & customisable lists (eg. enumerate/itemize, etc.)
+\usepackage{verbatim} % adds environment for commenting out blocks of text & for better verbatim
+\usepackage{subfig} % make it possible to include more than one captioned figure/table in a single float
+
+\usepackage{textcomp}
+
+
+% These packages are all incorporated in the memoir class to one degree or another...
+
+%%% HEADERS & FOOTERS
+\usepackage{fancyhdr} % This should be set AFTER setting up the page geometry
+\pagestyle{fancy} % options: empty , plain , fancy
+\renewcommand{\headrulewidth}{0pt} % customise the layout...
+\lhead{}\chead{}\rhead{}
+\lfoot{}\cfoot{\thepage}\rfoot{}
+
+%%% SECTION TITLE APPEARANCE
+\usepackage{sectsty}
+\allsectionsfont{\sffamily\mdseries\upshape} % (See the fntguide.pdf for font help)
+% (This matches ConTeXt defaults)
+
+%%% ToC (table of contents) APPEARANCE
+\usepackage[nottoc,notlof,notlot]{tocbibind} % Put the bibliography in the ToC
+\usepackage[titles,subfigure]{tocloft} % Alter the style of the Table of Contents
+\renewcommand{\cftsecfont}{\rmfamily\mdseries\upshape}
+\renewcommand{\cftsecpagefont}{\rmfamily\mdseries\upshape} % No bold!
+
+\setlength{\parindent}{0em}
+\setlength{\parskip}{1em}
+\usepackage{amsmath}
+\usepackage{upgreek}
+
+
+%%% END Article customizations
+
+%%% The "real" document content comes below...
+
+\title{Formalized Linear Programming}
+\author{Chris Hughes}
+\date{}
+
+
+\begin{document}
+\bibliographystyle{plain}
+\lstset{language=lean}
+\lstset{basicstyle=\normalsize}
+\maketitle
+\begin{abstract}
+  A formally proven implementation of the simplex algorithm in the Lean theorem prover. The aim is to implement an efficiently computable and proven correct implementation of the simplex algorithm in a similar way to the implementation in the integer set library. Some additional functionality from the integer set library is also implemented in Lean.
+\end{abstract}
+
+\section{Introduction}
+\color{red}Describe motivation of project.
+The aim is to provide a practically computable implementation of the simplex algorithm (Coq version did not aim to do this). It differs in that we use a more complex tableau data type (dead columns and unrestricted rows). We also use a different pivot rule (Bland's Rule - lexicographic rule seems to be an ambiguous name).
+
+Description of why Lean is a good language to do this in.\color{black}
+
+\section{Description of Linear Programming}
+\color{red} The standard simplex algorithm. No reference to Lean code \color{black}
+
+\section{Description of our version of the linear programming problem}
+\color{red} Our version, dead columns, unrestricted variables, stopping early. Also very little reference to Lean code. \color{black}
+
+\section{Description of Lean code and proofs}
+\color{red} Only decribe Lean code where I had to do something in a way that was not the obvious way. The termination proof is interesting since the majority of the length of the proof is about stuff that was not mentioned on paper. Also `pequiv` made a few things a little easier and is not obvious. \color{black}
+
+\subsection{Our version of the linear programming problem}
+\color{red}We have dead columns and restricted rows. Describe the tableau data type, and the partition data type.
+Also describe and explain the Lean definition of the problem i.e. sol\_set etc. Aim to make it accessible to somebody who does not know about linear programming. Maybe include a section on our  version of the linear programming problem with no reference to Lean code whatsoever, and then introduce Lean code later.
+
+Some formalization papers (Rob Lewis - p-adic numbers) have a section on mathlib without reference to the p-adic numbers. I don't really think this is necessary, but maybe it is.\color{black}
+
+
+
+\subsubsection{Tableau}
+The tableau data type represents a polyhedron as a system of affine equalities, a set of ``restricted" variables that are constrained to be nonnegative, and a set of ``dead" column variables constrained to be equal to zero. The representation is similar to the representation used in the Simplify theorem prover \cite{simplify}.
+
+\verb|tableau m n| represents a relation between $m + n$ rational variables, by partitioning the $m + n$ variables into a vector of $m$ ``row" variables and $n$ ``column" variables. This partition is represented as two vectors in Lean.
+\begin{lstlisting}
+structure partition (m n : ℕ) : Type :=
+(row_indices : vector (fin (m + n)) m)
+(col_indices : vector (fin (m + n)) n)
+(mem_row_indices_or_col_indices :
+  ∀ v : fin (m + n), v ∈ row_indices.to_list ∨ v ∈ col_indices.to_list)
+\end{lstlisting}
+
+The type \verb|fin (m + n)| is the type of nonnegative integers less than \verb|m + n|. The \verb|row_indices| and \verb|column_indices| fields of the structure are vectors of length \verb|m| and \verb|n| respectively, containing elements of \verb|fin (m + n)|. The final field of the structure stipulates that all element of \verb|fin (m + n)| are an element of either \verb|row_indices| or \verb|col_indices|. This also implies, via a pigeonhole argument, that the two vectors are disjoint and have no duplicates. Given vectors $r$ and $c$ of row and column indices, it is possible to define the following minors of any vector $x \in \mathbb{Q}^{m + n}$.
+\begin{equation}\label{eqn:minor}
+\begin{aligned}
+x_r := (x_{r_0}, ... , x_{r_{m-1}}) \\
+x_c := (x_{c_0}, ... , x_{c_{m-1}})
+\end{aligned}
+\end{equation}
+
+Given a \lstinline|partition m n|, it is useful to define the functions taking a row or column index and returning the variable in that column or row.
+
+\begin{lstlisting}[caption = {\lstinline|rowg| and \lstinline|colg| return the variable in a given column or row of a tableau}, captionpos = b]
+def rowg : fin m → fin (m + n) := P.row_indices.nth
+def colg : fin n → fin (m + n) := P.col_indices.nth
+\end{lstlisting}
+
+We also define the matrices corresponding to the linear maps taking the minors defined in equation \ref{eqn:minor}. To do this for the row minor, we first define a \lstinline|pequiv| between \lstinline|fin (m + n)| and \lstinline|fin m|. This is a representation of a bijection between a subset of \lstinline|fin m| and a subset of \lstinline|fin (m + n)|.
+
+\color{red}Should I go into detail on the \lstinline|pequiv| data type and how I use it? It is referred to in the definition of \lstinline|flat| and \lstinline|of_col|, and consequently in the statements of the correctness proofs, but actually not used very much in the proofs, and turned out to be not as useful as I thought at first.\color{black}
+
+These ``row'' variables are then expressed as affine combinations of the ``column'' variables by the tableau. Given an $m \times n$ matrix $A$, and a constant vector $k \in \mathbb{Q}^m$, we can express the following relation between the current row variables $x_r$ and column variables $x_c$.
+\begin{equation}\label{eqn:axk}
+  x_r = Ax_c + k
+\end{equation}
+
+The tableau data type in Lean, consists of an $m \times n$ matrix, the constant vector \verb|const|, a set of restricted variables, constrained to be nonnegative, and the set of dead columns, constrained to be equal to zero. It also contains a \verb|partition m n|, defining the current row and column variables.
+
+\begin{lstlisting}
+structure tableau (m n : ℕ) extends partition m n :=
+(to_matrix  : matrix (fin m) (fin n) ℚ)
+(const      : cvec m)
+(restricted : finset (fin (m + n)))
+(dead       : finset (fin n))
+\end{lstlisting}
+
+The \verb|matrix| datatype in Lean is implemented as a binary function from any pair of finite indexing types into a ring, in this case $\mathbb{Q}$. For this application the indexing types are \verb|fin m| and \verb|fin n|.
+
+Given a tableau it is possible to define the polyhedron corresponding to the tableau. First the \verb|flat| is defined, the affine subset of $\mathbb{Q}^{m + n}$ that satisfies the affine equalities.
+
+\begin{lstlisting}
+def flat : set (cvec (m + n)) :=
+{ x | T.to_partition.rowp.to_matrix ⬝ x =
+  T.to_matrix ⬝ T.to_partition.colp.to_matrix ⬝ x + T.const }
+\end{lstlisting}
+
+\verb|T.to_partition.rowp.to_matrix| is an $m \times (m + n)$ matrix, which corresponds to the linear map taking the minor $x_r$ of $x$ defined in (\ref{eqn:minor}). \verb|T.to_partition.colp.to_matrix| does the same for the column variables. This equation is the same as the equation in (\ref{eqn:axk}). The notation \lstinline|⬝| is used for matrix multiplication.
+
+The other relevant sets are the \verb|res_set|, the intersection of the flat and the set such that all restricted variables are nonnegative, and the \verb|dead_set|, the intersection of the flat and the set such that the variables assigned to all dead columns are equal to zero. Finally the main object of study is the \verb|sol_set|; the intersection of the \verb|res_set| and the \verb|dead_set|. In the definition of \lstinline|sol_set|, \lstinline|T.to_partition.colg j| returns the variable assigned to the column \lstinline |j| in \lstinline|T|.
+
+\begin{lstlisting}
+def res_set : set (cvec (m + n)) := flat T ∩ { x | ∀ i, i ∈ T.restricted → 0 ≤ x i 0 }
+
+def dead_set : set (cvec (m + n)) :=
+flat T ∩ { x | ∀ j, j ∈ T.dead → x (T.to_partition.colg j) 0 = 0 }
+
+def sol_set : set (cvec (m + n)) :=
+res_set T ∩ { x | ∀ j, j ∈ T.dead → x (T.to_partition.colg j) 0 = 0 }
+\end{lstlisting}
+
+Given any assignment of values to the column variables of the tableau, there is a unique point in the \lstinline|flat| such that the column variables have these values. The function \lstinline|of_col| returns this point.
+\begin{lstlisting}
+def of_col (T : tableau m n) (x : cvec n) : cvec (m + n) :=
+T.to_partition.colp.to_matrixᵀ ⬝ x + T.to_partition.rowp.to_matrixᵀ ⬝ (T.to_matrix ⬝ x + T.const)
+\end{lstlisting}
+
+A tableau \lstinline|T| is said to be \lstinline|feasible| if the sample point of the tableau, \lstinline|of_col T 0| is in the \lstinline|sol_set| of \lstinline|T|, or equivalently, the constant column of the tableau is nonnegative in every row owned by a restricted variable.
+
+\begin{lstlisting}
+def feasible (T : tableau m n) : Prop :=
+∀ i, T.to_partition.rowg i ∈ T.restricted → 0 ≤ T.const i 0
+\end{lstlisting}
+
+\subsection{Simplex}
+\color{red}pivot\_col and pivot\_row function description. The type and behaviour of the simplex function. Statements of correctness proofs.\color{black}
+
+\color{red}Probably the description of what the simplex algorithm should come before the description of the data types\color{black}
+
+The simplex implemented in Lean differs from a classical simplex in that there are both dead columns and unrestricted variables. These slightly complicate the proofs of correctness of the simple algorithm.
+
+The simplex algorithm finds a point within a polyhedron that maximises a given objective variable. This objective variable must own a row in the starting tableau. If this variable is unbounded within the polyhedron, then it will return a proof of unboundedness. The simplex algorithm works by iteratively pivoting the tableau, whilst increasing the value of the
+objective variable in the sample point of the tableau. This objective value is the value in the constant column of the objective row. The starting tableau must be feasible, and every tableau visited by the algorithm will also be feasible.
+
+The pivot operation takes a row index $i$ and a column index $j$ and moves the variable assigned to row $i$ to column $j$, and the variables assigned to column $j$ to row $i$, whilst updating the tableau to preserve the same polyhedron. It is possible to preserve the same polyhedron if the entry \lstinline|T.to_matrix i j| of the tableau matrix is nonzero.
+
+The simplex algorithm always chooses a pivot that maintains or increases the objective value. In order to do this the pivot column and row must satisfy certain properties.
+
+The pivot column \lstinline|c| is selected first. The pivot column must have the following property.
+\begin{lstlisting}[label=lst:col_spec]
+T.to_matrix obj c ≠ 0 ∧ T.to_partition.colg c ∈ T.restricted →
+  0 < T.to_matrix obj c ≠ 0
+\end{lstlisting} %make this an equation
+If there is no column with this property, then the sample solution of the current tableau is optimal, and the simplex algorithm terminates.
+
+The pivot row \lstinline|r| must be chosen such that \lstinline|T.to_matrix obj c / T.to_matrix r c < 0|. In order to maintain feasibility of the pivotted tableau, out of the rows with that property the algorithm chooses the row that minimises the value \lstinline|T.to_matrix abs (T.const r 0 / T.to_matrix r c)| %make this nicer.
+If no row with these properties can be found, the objective variable must be unbounded, and the simplex algorithm terminates.
+
+As long as the objective value is strictly increasing, it is straightforward to prove that this algorithm terminates. However, in certain circumstances, the objective value does not increase after pivoting, and it is necessary to choose carefully the pivot row and column within the constraints above in order to ensure termination. There are many methods of doing this; the method implemented in Lean is Bland's rule \cite{Blands_rule}. This is described in section \ref{section:bland}
+
+For the maximisation problem, the simplex algorithm terminates only when it fails to find either a pivot row or column with the required properties. Sometimes it is only necessary to verify if the maximum value of a variable is positive. For this purpose a boolean ``while'' condition for early termination is added to the simplex function.
+
+The simplex algorithm in Lean outputs the tableau it terminated on, as well as the reason for termination; either the objective variable is unbounded, the tableau sample solution is optimal, or the ``while'' condition was false. In the cases that the objective variable is unbounded, it also returns the pivot column that it found before it failed to find a pivot row. The simplex algorithm also requires a proof that the input tableau is feasible. This condition is necessary to prove termination.
+
+\begin{lstlisting}
+def simplex (w : tableau m n → bool) (obj : fin m) : Π (T : tableau m n)
+  (hT : feasible T), tableau m n × termination n
+\end{lstlisting}
+The simplex algorithm returns a \lstinline|tableau m n| and an element of \lstinline|termination n|, an inductive type specifying the conditions for termination, and also returning the final pivot column index in the case that the objective value is unbounded.
+\begin{lstlisting}
+inductive termination (n : ℕ) : Type
+| while {}              : termination
+| unbounded (c : fin n) : termination
+| optimal {}            : termination
+\end{lstlisting}
+
+\subsection{Bland's Rule}\label{section:bland}
+
+\color{red}
+How much detail to go into in this proof? This was one of the more challenging parts of the formalization, however, the proof is actually not very nicely written at the moment, for example the definition of fickle is not quite the same as in Chvatal. I used a weaker notion that seemed good enough,but then one variable that should be fickle ended up not being fickle, and I had to get round this in a slightly messy way.
+\color{black}
+
+The simplex implemented in Lean uses Bland's rule to ensure termination. If the pivot column is restricted then we choose the column owned by a variable with the smallest index out of the columns that satisfy the condition specified in [refer to earlier section]. We do the same for the rows that satisfy the specified condition.
+
+In order to prove that this rule will terminate, it suffices to prove that the simplex does not repeat a tableau. This is because there are only finitely many tableaux that can be visited by the simplex algorithm, at most one for each of the finitely many partitions of the variables. Supposing that the simplex algorithm does repeat then there is a finite set of ``fickle'' variables that are pivoted during a cycle. By always choosing the variable with the smallest index, we know that the largest of the fickle variables was the unique fickle column variable satisfying [refer to earlier section] in some tableau in the cycle, and the unique fickle row variable in some other tableau in this cycle. It is possible to derive a contradiction from this, though the proof is omitted here \cite{Chvatal}.
+
+In order to provide a proof of termination of the simplex algorithm in Lean, it is necessary to give a relation, a proof of well foundedness of this relation, and a proof that the sequence of tableaux accessed by the simplex algorithm is decreasing according to this relation. For this proof of termination, there is no natural choice of relation, so the relation is just defined using the pivot rule. Given tableaux \lstinline|T'| and \lstinline|T|, \lstinline|rel obj T' T| is a relation saying that if the simplex algorithm visits \lstinline|T|, then at some point after it will visit \lstinline|T'|. It is defined inductively.
+
+\begin{lstlisting}
+inductive rel : tableau m n → tableau m n → Prop
+| pivot : ∀ {T}, feasible T → ∀ {r c}, c ∈ pivot_col T obj →
+  r ∈ pivot_row T obj c → rel (T.pivot r c) T
+| trans_pivot : ∀ {T₁ T₂ r c}, rel T₁ T₂ → c ∈ pivot_col T₁ obj →
+  r ∈ pivot_row T₁ obj c → rel (T₁.pivot r c) T₂
+\end{lstlisting}
+
+
+\color{red}Include description of pivot\_col and pivot\_row functions somewhere\color{black}
+
+Two tableau \lstinline|T| and \lstinline|T'| are related if either \lstinline|T' = T.pivot r c| where \lstinline|r| and \lstinline|c| are the pivot row and column selected according to Bland's rule, or if there exists another tableau \lstinline|T₁| such that \lstinline|rel obj T₁ T| and \lstinline|T' = T₁.pivot r c|.
+
+\subsection{sign\_of\_max and whatever else we do}
+\color{red}I have written \lstinline|add_row|, \lstinline|sign_of_max|, and \lstinline|assert_ge| although there are no proofs about \lstinline|assert_ge|. This part is lacking a little bit, these functions don't really solve problems yet, they're just part of functions I haven't implemented that do solve problems.\color{black}
+
+\section{Refined algorithm and performance}
+\color{red}How fast is it after refinement? Compare with ISL etc. Talk about how it was done in a rubbish way, but could be done better with a refinement framework.\color{black}
+
+\section{Conclusion}
+\color{red}
+Follow up work. Difficulties I came across. It would have been nice to have a generic theory of linear programming. Some of what I wrote could be applied to other implementations of simplex, but not much.
+\color{black}
+\bibliography{bibl}
+
+\end{document}

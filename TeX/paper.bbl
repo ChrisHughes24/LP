@@ -1,0 +1,18 @@
+\begin{thebibliography}{1}
+
+\bibitem{Blands_rule}
+New finite pivoting rules for the simplex method.
+\newblock {\em Math. Oper. Res.}, 2(2):103--107, May 1977.
+
+\bibitem{Chvatal}
+Va{\v{s}}ek Chv{\'a}tal.
+\newblock {\em Linear programming}.
+\newblock A series of books in the mathematical science. Freeman, New York,
+  1983.
+
+\bibitem{simplify}
+David Detlefs, Greg Nelson, and James Saxe.
+\newblock Simplify: A theorem prover for program checking.
+\newblock {\em Journal of the ACM}, 52, 09 2003.
+
+\end{thebibliography}

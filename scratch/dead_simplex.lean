@@ -1,4 +1,4 @@
-import dead_tableau order.lexicographic
+import tableau order.lexicographic
 
 open matrix fintype finset function pequiv partition
 variables {m n : ℕ}

@@ -1,0 +1,48 @@
+This is BibTeX, Version 0.99d (TeX Live 2019)
+Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
+The top-level auxiliary file: paper.aux
+The style file: plain.bst
+Database file #1: bibl.bib
+Warning--empty author in Blands_rule
+You've used 3 entries,
+            2118 wiz_defined-function locations,
+            520 strings with 4427 characters,
+and the built_in function-call counts, 786 in all, are:
+= -- 78
+> -- 26
+< -- 0
++ -- 11
+- -- 8
+* -- 58
+:= -- 135
+add.period$ -- 9
+call.type$ -- 3
+change.case$ -- 13
+chr.to.int$ -- 0
+cite$ -- 4
+duplicate$ -- 33
+empty$ -- 68
+format.name$ -- 8
+if$ -- 162
+int.to.chr$ -- 0
+int.to.str$ -- 3
+missing$ -- 4
+newline$ -- 17
+num.names$ -- 4
+pop$ -- 11
+preamble$ -- 1
+purify$ -- 11
+quote$ -- 0
+skip$ -- 21
+stack$ -- 0
+substring$ -- 40
+swap$ -- 3
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 10
+warning$ -- 1
+while$ -- 6
+width$ -- 4
+write$ -- 34
+(There was 1 warning)

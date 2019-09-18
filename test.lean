@@ -32,11 +32,18 @@ def T : tableau 25 10 :=
     [-1, 0, 0, 0, -1, -1, 1, -1, 0, 1], [-1, 0, 0, -1, 1, 1, 1, -1, 1, 0],
     [0, -1, 0, 0, 0, -1, 0, 1, 0, -1], [1, -1, 1, 0, 0, 1, 0, 1, 0, -1],
     [0, -1, -1, 0, 0, 0, -1, 0, 1, 0]],
-  const := λ i _, if i.1 < 13 then 0 else 1,
+  const := λ i _, 1,
   to_partition := default _,
-  restricted := univ.erase 25 }
+  restricted := univ,
+  dead := ∅ }
 
 set_option trace.compiler.code_gen true
+set_option profiler true
+#eval let l := ((list.fin_range 10).product (list.fin_range 25)).bind
+  (λ i : fin 10 × fin 25, if T.to_matrix i.1 i.2 = 0 then [] else [(T.pivot i.1 i.2).to_matrix])
+  in (l.length, l)
 
-#eval let s := T.simplex (λ _, tt) 0 dec_trivial in
-(s.1.const, s.1.to_partition.row_indices.1)
+def s := let s := T.simplex (λ _, tt) 0 dec_trivial in
+(s.1.const, s.1.to_partition.row_indices.1, s.2)
+
+#eval s
