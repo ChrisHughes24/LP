@@ -96,11 +96,109 @@ The aim is to provide a practically computable implementation of the simplex alg
 
 Description of why Lean is a good language to do this in.\color{black}
 
-\section{Description of Linear Programming}
+\section{Linear Programming}
 \color{red} The standard simplex algorithm. No reference to Lean code \color{black}
+
+The simplex algorithm aims to optimize the value of an objective function within the constraints of a set of affine inequalities. It can be used to solve problems of the following form.
+\color{red} This is a slightly nonstandard way of writing a linear program. The usual way would be $Ax \le b$. However the matrix that is stored during a simplex is $-A$ according to that representation, but $A$ according to the representation below.\color{black}
+\begin{equation}
+  \begin{aligned}
+    \text{Find } x \text{ that maximizes } && c^Tx \\
+    \text{subject to } && A x + b \ge 0\\
+    \text{and } && x \ge 0
+  \end{aligned}
+\end{equation}
+Here, $x \in \mathbb{Q}^n$, $c \in \mathbb{Q}^n$, $b \in \mathbb{Q}^m$, and $A \in \mathbb{Q}^{m \times n}$.
+This can be written in an equivalent form \color{red} The inclusion of $z$ in the objective function is slightly unusual because obviously maximizing $c^Tx$ is the same as maximizing $c^Tx + z$. However $z$ is a cell in the tableau, it is the objective function value of the sample solution, and the explanation of the tableau is slightly easier with it\color{black}
+\begin{equation}
+  \begin{aligned}
+    \text{Find } x \text{ and } y \text{ that maximize } && c^Tx + z \\
+    \text{subject to } && y = A x + b \\
+    \text{and } && x \ge 0, y \ge 0
+  \end{aligned}
+\end{equation}
+with $y \in \mathbb{Q}^m$ and $z \in \mathbb{Q}$
+
+The subset of $\mathbb{Q}^{m+n}$, $\{(x,y) : y = Ax + b \wedge x \ge 0 \wedge y \ge 0\}$ is stored as part of the simplex algorithm. This problem can be written in tableau form.
+\begin{equation}
+  \begin{aligned}
+    y_1 && = && A_{11}x_1 && + && A_{12}x_2 && + && \dots && + && A_{1n}x_n && + && b_1\\
+    y_2 && = && A_{21}x_1 && + && A_{22}x_2 && + && \dots && + && A_{2n}x_n && + && b_2\\
+    \vdots && && \vdots && && \vdots && && && && \vdots && \vdots \\
+    y_m && = && A_{m1}x_1 && + && A_{m2}x_2 && + && \dots && + && A_{mn}x_n && + && b_n\\
+    c^Tx && = && c_1x_1 && + && c_2x_2 && + && \dots && + && c_nx_n && + && z
+  \end{aligned}
+\end{equation}
+In this tableau representation the $y_i$ are known as the \textit{row} variables, and the $x_j$ are the \textit{column} variables. In a tableau the row variables are expressed as affine functions in terms of the column variables.
+
+The simplex algorithm iteratively performs the \textit{pivot} operation on a tableau. The pivot operation takes a row and a column variable as an argument, and swaps their positions in the tableau. If $x_i$ and $y_j$ are pivoted, then in the new tableau $x_j$ becomes a row variable and $y_i$ becomes a column variable. The variables $(y_1, y_2, \dots, x_i, \dots y_m)$ are expressed as affine functions of $(x_1, x_2, \dots, y_j, \dots, x_m)$. The matrix $A$, and the vectors $c$ and $b$ are updated to $A'$, $c'$ and $b'$, such that the tableau represents the same subset of $\mathbb{Q}^{m + n}$, and the same optimization problem. In addition the row representing the objective function now has a potentially nonzero constant term, which we will call $z$. This is only possible if $A_{ij} \ne 0$.
+\begin{equation}
+  \begin{aligned}
+    y_1 && = && A'_{11}x_1 && + && A'_{12}x_2 && + && \dots && + && A'_{1j}y_i && + && \dots && + && A'_{1n}x_n && + && b'_1\\
+    y_2 && = && A'_{21}x_1 && + && A'_{22}x_2 && + && \dots && + && A'_{2j}y_i && + && \dots && + && A'_{2n}x_n && + && b'_2\\
+    \vdots && && \vdots && && \vdots && && && && \vdots && && && && \vdots && && \vdots \\
+    x_j && = && A'_{i1}x_1 && + && A'_{i2}x_2 && + && \dots && + && A'_{ij}y_i&& + && \dots && + && A'_{in}x_n && + && b'_i\\
+    \vdots && && \vdots && && \vdots && && && && \vdots && && && && \vdots && && \vdots \\
+    y_m && = && A'_{m1}x_1 && + && A'_{m2}x_2 && + && \dots && + && A'_{mj}y_i&& + && \dots && + && A'_{mn}x_n && + && b'_n\\
+    c^Tx + z && = && c'_1x_1 && + && c'_2x_2 && + && \dots && + && c'_jy_i && + && \dots && + && c'_nx_n && + && z'
+  \end{aligned}
+\end{equation}
+The expressions for the updated matrix $A'$, and the updated vectors $c'$, $b'$ are given by the following formulas \cite{Nelson:1980:TPV:909447}.
+\begin{equation}
+A'_{i'j'} = \begin{cases}
+  A_{ij}^{-1} & \text{if } i' = i \text{ and } j' = j \\
+  -A_{ij'}/A_{ij} & \text{if } i' = i \text{ and } j' \ne j \\
+  A_{i'j}/A_{ij} & \text{if } i' \ne i \text{ and } j' = j \\
+  A_{i'j'} - A_{i'j}A_{ij'}/A_{ij}  & \text{if } i' \ne i \text{ and } j' \ne j
+\end{cases}
+\end{equation}
+\begin{equation}\label{eqn:pivot_const}
+  b'_{i'} = \begin{cases}
+    -b_i/A_{ij} & \text{if } i' = i \\
+    b_{i'} - A_{i'j}b_i/A_{ij} & \text{if } i' \ne i
+  \end{cases}
+\end{equation}
+\begin{equation}
+  c'_{j'} = \begin{cases}
+    c_j/A_{ij} & \text{if } j' = j \\
+    c_{j'} - c_jA_{ij'}/A_{ij} & \text{if } j' \ne j
+  \end{cases}
+\end{equation}
+\begin{equation}\label{eqn:pivot_obj}
+  z' = z - c_jb_i/A_{ij}
+\end{equation}
+
+Note that $b$, $c$ and $z$ are updated as though they are a continuation of $A$; $b$ is updated in the same way as a column of $A$, and $c$ is updated in the same way as a row of $A$.
+
+\color{red} It's nicest to talk about the tableau as $x_r = Ax_c + b$ with $x_r$ and $x_c$ the row and column minors of $x$. Do I stick to one ugly notation or change my convention in the middle? \color{black}
+
+Given any assignment of values to the column variables of a tableau, there is a unique $x$ satisfying $x_r=Ax_c+b$ The \textit{sample solution} of a tableau is the solution of $x_r = Ax_c+b$ found by setting all of the current column variables to zero. The row variables must then take the values given by the column $b$ of the current tableau. Similarly, the objective function must have value $z$ in the \textit{sample solution}. A tableau is \textit{feasible} if the sample solution also satisfies $x \ge 0$. This is equivalent to saying $b \ge 0$.
+
+Given a feasible tableau, the simplex algorithm iteratively pivots whilst maintaining or increasing the objective function value of the sample solution $z$, as well as maintaining feasibility of the tableau. The chosen pivot row and pivot column $i$ and $j$ of a tableau always satisfy the following properties.
+\begin{equation}\label{eqn:valid_pivot}
+  \begin{aligned}
+    c_j > 0 \\
+    A_{ij} < 0 \\
+    \forall i', A_{i'j} < 0 \implies \left|b_i/A_{ij}\right| \le \left|b_{i'} / A_{i'j}\right|
+  \end{aligned}
+\end{equation}
+
+If the pivot row and pivot column satisfy these properties then using the expressions in equations (\ref{eqn:pivot_const}) and (\ref{eqn:pivot_obj}), it can be shown the pivoted tableau is both feasible and that $z$ has either increased or stayed the same.
+
+The choice of pivot row and column satisfying (\ref{eqn:valid_pivot}) is non-unique, and must be chosen carefully in order to guarantee termination. Different implementations of the simplex algorithm use different pivot rules to guarantee termination. If $z$ was strictly increasing it would straightforward to prove the algorithm terminates, since there are only finitely many partitions of the variables into row and column variables, and the simplex algorithm cannot repeat a partition if $z$ is strictly increasing.   Our implementation uses Bland's Rule \cite{Blands_rule}.
+
+If there is no column $j$ satisfying $c_j > 0$, then the sample solution must maximize $c^Tx_c$. This is because $c^T \le 0$ and $x_c \ge 0$, so $c^Tx_c \le 0$, and the maximum value of this is given by setting $x_c$ to zero.
+
+\color{red} Explanation below could be better\color{black}
+
+If there is a column $j$ satisfying $c_j > 0$, but no row $i$ satisfying $A_{ij} < 0$ then the objective function must be unbounded. The variable in column $j$ is unbounded; for any $k > 0$, the solution found by setting the variable in column $j$ to $k$ and all other column variables to zero does not break the nonnegativity constraints of the row variables. The expression for the variable in row $i$ is $A_{ij}k + b_i$, which is nonnegative. The objective function is $c_jk+z$, which is unbounded since $k$ is unbounded.
+
+The simplex algorithm terminates when there is no pivot row and column satisfying the conditions in (\ref{eqn:valid_pivot}). When it terminates we have always either detected unboundedness or found an optimal solution.
 
 \section{Description of our version of the linear programming problem}
 \color{red} Our version, dead columns, unrestricted variables, stopping early. Also very little reference to Lean code. \color{black}
+
+The implementation in Lean is most similar
 
 \section{Description of Lean code and proofs}
 \color{red} Only decribe Lean code where I had to do something in a way that was not the obvious way. The termination proof is interesting since the majority of the length of the proof is about stuff that was not mentioned on paper. Also `pequiv` made a few things a little easier and is not obvious. \color{black}
@@ -129,7 +227,7 @@ The type \verb|fin (m + n)| is the type of nonnegative integers less than \verb|
 \begin{equation}\label{eqn:minor}
 \begin{aligned}
 x_r := (x_{r_0}, ... , x_{r_{m-1}}) \\
-x_c := (x_{c_0}, ... , x_{c_{m-1}})
+x_c := (x_{c_0}, ... , x_{c_{n-1}})
 \end{aligned}
 \end{equation}
 
