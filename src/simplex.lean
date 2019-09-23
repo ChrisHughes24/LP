@@ -587,8 +587,8 @@ have nonpos_of_colg_eq : ∀ j, j ≠ c' →
         (lt_of_le_of_ne (hj.symm ▸ hct.symm ▸ hc't) (by simpa))
     else nonpos_of_colg_ne _ (fickle_colg_iff_ne.2 $ by simpa [hj, eq_comm] using hjc) hjc',
 have unique_row : ∀ i' ≠ i, T.const i' 0 = 0 → fickle T T' (T.to_partition.rowg i') →
-    0 ≤ T.to_matrix i c,
-  from λ i hir hi0 hrow,
+    0 ≤ T.to_matrix i' c,
+  from λ i' hii hi0 hrow,
     let ⟨T₃, c₃, hc₃, hrow₃, hrelT₃T, hrelTT₃⟩ :=
       exists_mem_pivot_col_of_fickle_row _ hrelTT' hrelT'T hrow in
     have hrelT₃T₃ : rel obj T₃ T₃, from hrelT₃T.trans hrelTT₃,
@@ -653,7 +653,7 @@ def simplex (w : tableau m n → bool) (obj : fin m) : Π (T : tableau m n) (hT 
       match pivot_row T obj j, @hc _ rfl, (λ i, @hrel i j rfl) with
       | none,   hrow, hrel := (T, unbounded j)
       | some i, hrow, hrel := have wf : rel obj (pivot T i j) T, from hrel _ rfl,
-        simplex (T.pivot i c) (hr rfl)
+        simplex (T.pivot i j) (hrow rfl)
       end
     end)
   (T, while)
@@ -682,11 +682,11 @@ lemma simplex_spec_aux (w : tableau m n → bool) (obj : fin m) :
     { rw simplex, simp [hw] },
     { cases hc : pivot_col T obj with c,
       { rw simplex, simp [hc, hw, simplex._match_1] },
-      { cases hr : pivot_row T obj c with r,
+      { cases hrow : pivot_row T obj c with i,
         { rw simplex,
-          simp [hr, hc, hw, simplex._match_1, simplex._match_2] },
-        { rw [← simplex_pivot hT hw hc hr],
-          exact have wf : rel obj (T.pivot i c) T, from rel.pivot hT hc hr,
+          simp [hrow, hc, hw, simplex._match_1, simplex._match_2] },
+        { rw [← simplex_pivot hT hw hc hrow],
+          exact have wf : rel obj (T.pivot i c) T, from rel.pivot hT hc hrow,
             simplex_spec_aux _ _ } } }
   end
 using_well_founded {rel_tac := λ _ _, `[exact ⟨_, rel_wf m n obj⟩],
@@ -717,12 +717,12 @@ lemma simplex_induction (P : tableau m n → Prop) (w : tableau m n → bool) (o
     { rwa [simplex_while_eq_ff hw] },
     { cases hc : pivot_col T obj with c,
       { rwa [simplex_pivot_col_eq_none hw hc] },
-      { cases hr : pivot_row T obj c with r,
-        { rwa simplex_pivot_row_eq_none hw hc hr },
-        { rw [← simplex_pivot _ hw hc hr],
-          exact have wf : rel obj (pivot T i c) T, from rel.pivot hT hc hr,
-            simplex_induction (feasible_of_mem_pivot_row_and_col hT hc hr)
-              (hpivot hw hc hr hT h0) @hpivot } } }
+      { cases hrow : pivot_row T obj c with i,
+        { rwa simplex_pivot_row_eq_none hw hc hrow },
+        { rw [← simplex_pivot _ hw hc hrow],
+          exact have wf : rel obj (pivot T i c) T, from rel.pivot hT hc hrow,
+            simplex_induction (feasible_of_mem_pivot_row_and_col hT hc hrow)
+              (hpivot hw hc hrow hT h0) @hpivot } } }
   end
 using_well_founded {rel_tac := λ _ _, `[exact ⟨_, rel_wf m n obj⟩],
   dec_tac := `[tauto]}

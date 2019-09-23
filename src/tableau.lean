@@ -374,67 +374,67 @@ lemma not_optimal_of_unbounded_above {v : fin (m + n)} {x : cvec (m + n)}
   not_le_of_gt (lt_add_one (x v 0)) (le_trans hy.2 (hm.2 y hy.1))
 
 /-- Expression for the sum of all but one entries in the a row of a tableau. -/
-lemma row_sum_erase_eq {x : cvec (m + n)} (hx : x ∈ T.flat) {i : fin m} {s : fin n} :
-  (univ.erase s).sum (λ j : fin n, T.to_matrix i j * x (T.to_partition.colg j) 0) =
-    x (T.to_partition.rowg i) 0 - T.const i 0 - T.to_matrix i s * x (T.to_partition.colg s) 0 :=
+lemma row_sum_erase_eq {x : cvec (m + n)} (hx : x ∈ T.flat) {i : fin m} {j : fin n} :
+  (univ.erase j).sum (λ j' : fin n, T.to_matrix i j' * x (T.to_partition.colg j') 0) =
+    x (T.to_partition.rowg i) 0 - T.const i 0 - T.to_matrix i j * x (T.to_partition.colg j) 0 :=
 begin
   rw [mem_flat_iff] at hx,
-  conv_rhs { rw [hx i, ← insert_erase (mem_univ s), sum_insert (not_mem_erase _ _)] },
+  conv_rhs { rw [hx i, ← insert_erase (mem_univ j), sum_insert (not_mem_erase _ _)] },
   simp
 end
 
 /-- An expression for a column variable in terms of row variables. -/
-lemma colg_eq {x : cvec (m + n)} (hx : x ∈ T.flat) {i : fin m} {s : fin n}
-  (his : T.to_matrix i s ≠ 0) : x (T.to_partition.colg s) 0 =
+lemma colg_eq {x : cvec (m + n)} (hx : x ∈ T.flat) {i : fin m} {j : fin n}
+  (his : T.to_matrix i j ≠ 0) : x (T.to_partition.colg j) 0 =
     (x (T.to_partition.rowg i) 0
-    -(univ.erase s).sum (λ j : fin n, T.to_matrix i j * x (T.to_partition.colg j) 0)
-        - T.const i 0) * (T.to_matrix i s)⁻¹ :=
-by simp [row_sum_erase_eq hx, mul_left_comm (T.to_matrix i s)⁻¹, mul_assoc,
-    mul_left_comm (T.to_matrix i s), mul_inv_cancel his]
+    -(univ.erase j).sum (λ j' : fin n, T.to_matrix i j' * x (T.to_partition.colg j') 0)
+        - T.const i 0) * (T.to_matrix i j)⁻¹ :=
+by simp [row_sum_erase_eq hx, mul_left_comm (T.to_matrix i j)⁻¹, mul_assoc,
+    mul_left_comm (T.to_matrix i j), mul_inv_cancel his]
 
 /-- Another expression for a column variable in terms of row variables. -/
-lemma colg_eq' {x : cvec (m + n)} (hx : x ∈ T.flat) {i : fin m} {s : fin n}
-  (his : T.to_matrix i s ≠ 0) : x (T.to_partition.colg s) 0 =
-  univ.sum (λ (j : fin n), (if j = s then (T.to_matrix i s)⁻¹
-    else (-(T.to_matrix i j * (T.to_matrix i s)⁻¹))) *
-      x (colg (swap (T.to_partition) i s) j) 0) -
-  (T.const i 0) * (T.to_matrix i s)⁻¹ :=
-have (univ.erase s).sum
-    (λ j : fin n, ite (j = s) (T.to_matrix i s)⁻¹ (-(T.to_matrix i j * (T.to_matrix i s)⁻¹)) *
-      x (colg (swap (T.to_partition) i s) j) 0) =
-    (univ.erase s).sum (λ j : fin n,
-      -T.to_matrix i j * x (T.to_partition.colg j) 0 * (T.to_matrix i s)⁻¹),
-  from finset.sum_congr rfl $ λ j hj,
-    by simp [if_neg (mem_erase.1 hj).1, colg_swap_of_ne _ (mem_erase.1 hj).1,
+lemma colg_eq' {x : cvec (m + n)} (hx : x ∈ T.flat) {i : fin m} {j : fin n}
+  (his : T.to_matrix i j ≠ 0) : x (T.to_partition.colg j) 0 =
+  univ.sum (λ j' : fin n, (if j' = j then (T.to_matrix i j)⁻¹
+    else (-(T.to_matrix i j' * (T.to_matrix i j)⁻¹))) *
+      x (colg (swap (T.to_partition) i j) j') 0) -
+  (T.const i 0) * (T.to_matrix i j)⁻¹ :=
+have (univ.erase j).sum
+    (λ j' : fin n, ite (j' = j) (T.to_matrix i j)⁻¹ (-(T.to_matrix i j' * (T.to_matrix i j)⁻¹)) *
+      x (colg (swap (T.to_partition) i j) j') 0) =
+    (univ.erase j).sum (λ j' : fin n,
+      -T.to_matrix i j' * x (T.to_partition.colg j') 0 * (T.to_matrix i j)⁻¹),
+  from finset.sum_congr rfl $ λ j' hj',
+    by simp [if_neg (mem_erase.1 hj').1, colg_swap_of_ne _ (mem_erase.1 hj').1,
       mul_comm, mul_assoc, mul_left_comm],
-by rw [← finset.insert_erase (mem_univ s), finset.sum_insert (not_mem_erase _ _),
+by rw [← finset.insert_erase (mem_univ j), finset.sum_insert (not_mem_erase _ _),
     if_pos rfl, colg_swap, colg_eq hx his, this, ← finset.sum_mul];
   simp [_root_.add_mul, mul_comm, _root_.mul_add]
 
 /-- Pivoting twice in the same place does nothing -/
-@[simp] lemma pivot_pivot {i : fin m} {s : fin n} (his : T.to_matrix i s ≠ 0) :
-  (T.pivot i s).pivot i s = T :=
+@[simp] lemma pivot_pivot {i : fin m} {j : fin n} (his : T.to_matrix i j ≠ 0) :
+  (T.pivot i j).pivot i j = T :=
 begin
   cases T,
   simp [pivot, function.funext_iff],
   split; intros; split_ifs;
-  simp [*, mul_assoc, mul_left_comm (T_to_matrix i s), mul_left_comm (T_to_matrix i s)⁻¹,
-    mul_comm (T_to_matrix i s), inv_mul_cancel his]
+  simp [*, mul_assoc, mul_left_comm (T_to_matrix i j), mul_left_comm (T_to_matrix i j)⁻¹,
+    mul_comm (T_to_matrix i j), inv_mul_cancel his]
 end
 
 /- These two sets are equal_in_flat, the stronger lemma is `flat_pivot` -/
-private lemma subset_flat_pivot {i : fin m} {s : fin n} (h : T.to_matrix i s ≠ 0) :
-  T.flat ⊆ (T.pivot i s).flat :=
+private lemma subset_flat_pivot {i : fin m} {j : fin n} (h : T.to_matrix i j ≠ 0) :
+  T.flat ⊆ (T.pivot i j).flat :=
 λ x hx,
-have ∀ i' : fin m, (univ.erase s).sum (λ j : fin n,
-  ite (j = s) (T.to_matrix i' s * (T.to_matrix i s)⁻¹)
-    (T.to_matrix i' j + -(T.to_matrix i' s * T.to_matrix i j * (T.to_matrix i s)⁻¹))
-      * x ((T.to_partition.swap i s).colg j) 0) =
-  (univ.erase s).sum (λ j : fin n, T.to_matrix i' j * x (T.to_partition.colg j) 0 -
-    T.to_matrix i j *
-      x (T.to_partition.colg j) 0 * T.to_matrix i' s * (T.to_matrix i s)⁻¹),
-  from λ i', finset.sum_congr rfl (λ j hj,
-    by rw [if_neg (mem_erase.1 hj).1, colg_swap_of_ne _ (mem_erase.1 hj).1];
+have ∀ i' : fin m, (univ.erase j).sum (λ j' : fin n,
+  ite (j' = j) (T.to_matrix i' j * (T.to_matrix i j)⁻¹)
+    (T.to_matrix i' j' + -(T.to_matrix i' j * T.to_matrix i j' * (T.to_matrix i j)⁻¹))
+      * x ((T.to_partition.swap i j).colg j') 0) =
+  (univ.erase j).sum (λ j' : fin n, T.to_matrix i' j' * x (T.to_partition.colg j') 0 -
+    T.to_matrix i j' *
+      x (T.to_partition.colg j') 0 * T.to_matrix i' j * (T.to_matrix i j)⁻¹),
+  from λ i', finset.sum_congr rfl (λ j' hj',
+    by rw [if_neg (mem_erase.1 hj').1, colg_swap_of_ne _ (mem_erase.1 hj').1];
       simp [mul_add, add_mul, mul_comm, mul_assoc, mul_left_comm]),
 begin
   rw mem_flat_iff,
@@ -448,40 +448,40 @@ begin
     congr, funext, congr },
   { dsimp [pivot],
     simp only [if_neg hi'i],
-    rw [← insert_erase (mem_univ s), sum_insert (not_mem_erase _ _),
+    rw [← insert_erase (mem_univ j), sum_insert (not_mem_erase _ _),
       if_pos rfl, colg_swap, this, sum_sub_distrib, ← sum_mul, ← sum_mul,
       row_sum_erase_eq hx, rowg_swap_of_ne _ hi'i],
     simp [row_sum_erase_eq hx, mul_add, add_mul,
       mul_comm, mul_left_comm, mul_assoc],
-    simp [mul_assoc, mul_left_comm (T.to_matrix i s), mul_left_comm (T.to_matrix i s)⁻¹,
-      mul_comm (T.to_matrix i s), inv_mul_cancel h] }
+    simp [mul_assoc, mul_left_comm (T.to_matrix i j), mul_left_comm (T.to_matrix i j)⁻¹,
+      mul_comm (T.to_matrix i j), inv_mul_cancel h] }
 end
 
 variable (T)
 
-@[simp] lemma pivot_pivot_element (i : fin m) (s : fin n) :
-  (T.pivot i s).to_matrix i s = (T.to_matrix i s)⁻¹ :=
+@[simp] lemma pivot_pivot_element (i : fin m) (j : fin n) :
+  (T.pivot i j).to_matrix i j = (T.to_matrix i j)⁻¹ :=
 by simp [pivot, if_pos rfl]
 
-@[simp] lemma pivot_pivot_row {i : fin m} {j s : fin n} (h : j ≠ s) :
-  (T.pivot i s).to_matrix i j = -T.to_matrix i j / T.to_matrix i s :=
+@[simp] lemma pivot_pivot_row {i : fin m} {j j' : fin n} (h : j' ≠ j) :
+  (T.pivot i j).to_matrix i j' = -T.to_matrix i j' / T.to_matrix i j :=
 by dsimp [pivot]; rw [if_pos rfl, if_neg h, div_eq_mul_inv]
 
-@[simp] lemma pivot_pivot_column {i' i : fin m} {s : fin n} (h : i' ≠ i) :
-  (T.pivot i s).to_matrix i' s = T.to_matrix i' s / T.to_matrix i s :=
+@[simp] lemma pivot_pivot_column {i' i : fin m} {j : fin n} (h : i' ≠ i) :
+  (T.pivot i j).to_matrix i' j = T.to_matrix i' j / T.to_matrix i j :=
 by dsimp [pivot]; rw [if_neg h, if_pos rfl, div_eq_mul_inv]
 
-@[simp] lemma pivot_of_ne_of_ne {i i' : fin m} {j s : fin n} (hi'i : i' ≠ i)
-  (hjs : j ≠ s) : (T.pivot i s).to_matrix i' j =
-  T.to_matrix i' j - T.to_matrix i' s * T.to_matrix i j / T.to_matrix i s :=
+@[simp] lemma pivot_of_ne_of_ne {i i' : fin m} {j j' : fin n} (hi'i : i' ≠ i)
+  (hjs : j' ≠ j) : (T.pivot i j).to_matrix i' j' =
+  T.to_matrix i' j' - T.to_matrix i' j * T.to_matrix i j' / T.to_matrix i j :=
 by dsimp [pivot]; rw [if_neg hi'i, if_neg hjs, div_eq_mul_inv]
 
-@[simp] lemma const_pivot_row {i : fin m} {s : fin n} : (T.pivot i s).const i 0 =
-  -T.const i 0 / T.to_matrix i s :=
+@[simp] lemma const_pivot_row {i : fin m} {j : fin n} : (T.pivot i j).const i 0 =
+  -T.const i 0 / T.to_matrix i j :=
 by simp [pivot, if_pos rfl, div_eq_mul_inv]
 
-@[simp] lemma const_pivot_of_ne {i i' : fin m} {s : fin n} (hi'i : i' ≠ i) : (T.pivot i s).const i' 0
-  = T.const i' 0 - T.to_matrix i' s * T.const i 0 / T.to_matrix i s :=
+@[simp] lemma const_pivot_of_ne {i i' : fin m} {j : fin n} (hi'i : i' ≠ i) : (T.pivot i j).const i' 0
+  = T.const i' 0 - T.to_matrix i' j * T.const i 0 / T.to_matrix i j :=
 by dsimp [pivot]; rw [if_neg hi'i, div_eq_mul_inv]
 
 @[simp] lemma restricted_pivot (i s) : (T.pivot i s).restricted = T.restricted := rfl
@@ -492,15 +492,15 @@ by dsimp [pivot]; rw [if_neg hi'i, div_eq_mul_inv]
 
 variable {T}
 
-@[simp] lemma flat_pivot {i : fin m} {s : fin n} (hij : T.to_matrix i s ≠ 0) :
-  (T.pivot i s).flat = T.flat :=
+@[simp] lemma flat_pivot {i : fin m} {j : fin n} (hij : T.to_matrix i j ≠ 0) :
+  (T.pivot i j).flat = T.flat :=
 set.subset.antisymm
   (by conv_rhs { rw ← pivot_pivot hij };
     exact subset_flat_pivot (by simp [hij]))
   (subset_flat_pivot hij)
 
-@[simp] lemma res_set_pivot {i : fin m} {s : fin n} (hij : T.to_matrix i s ≠ 0) :
-  (T.pivot i s).res_set = T.res_set :=
+@[simp] lemma res_set_pivot {i : fin m} {j : fin n} (hij : T.to_matrix i j ≠ 0) :
+  (T.pivot i j).res_set = T.res_set :=
 by rw [res_set, flat_pivot hij]; refl
 
 @[simp] lemma dead_set_pivot {i : fin m} {j : fin n} (hij : T.to_matrix i j ≠ 0)
