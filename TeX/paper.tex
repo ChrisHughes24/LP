@@ -86,7 +86,32 @@
 \lstset{basicstyle=\normalsize}
 \maketitle
 \begin{abstract}
-  Sentence about applications of simplex. Most simplex solvers are non-verified implementations and are not guaranteed to be correct. They are usually written in languages like C++ which are difficult to certify. One verified implementation exists, but it is not intended to be executable in practice. We implement a formally verified executable simplex solver in the Lean theorem prover. Our implementation uses Bland's rule to select a pivot, and a pivot function stated without any matrix multiplication in contrast to some book proofs on the simplex algorithm. This research demonstrates the practicality of Lean as a language for fast verified algorithms.
+% What is the general topic we look at?
+Correct and efficient linear programming, using the simplex
+algorithm, is of high importance not only in the context of
+operational research but also in programming language analysis.
+% What is the specific research problem we face?
+While existing solvers are robust, the lack of formally verified
+implementations prevents their use in computational proofs and
+rare corner-case bugs make the use of linear programming for
+automatic program generation difficult.
+% Why has nobody else adequately answered the research problem yet?
+Today, existing implementations are either written in low-level
+high-performance languages (e.g., C++), which are hard to verify, or
+focus on the verification aspects but are not intended to be executable in practice.
+% What is our key idea to address the stated research problem?
+We address this problem by implementing an executable and verified
+simplex solver in the Lean programming language.
+% What are the key steps needed to successfully implement our idea?
+We ensure both ease of verification and reasonable execution
+performance by uses Bland's rule to select a pivot and by stating our
+pivot function without large and costly matrix multiplications as
+they are often used in textbook formalizations.
+% What is the key global impact we envision our research to have?
+Our research provides core foundations for verified linear
+programming and demonstrates the practicality of Lean as a language
+for fast verified constraint programming.
+
 \end{abstract}
 
 \section{Introduction}
