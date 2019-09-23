@@ -18,7 +18,8 @@ local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := transpose
 
 variable (P : partition m n)
-
+attribute [no_rsimp] add_comm
+#print mul_comm
 def fintype_aux : partition m n ≃ { x : vector (fin (m + n)) m × vector (fin (m + n)) n //
   ∀ v : fin (m + n), v ∈ x.1.to_list ∨ v ∈ x.2.to_list } :=
 { to_fun := λ ⟨r, c, h⟩, ⟨⟨r, c⟩, h⟩,
@@ -183,7 +184,7 @@ end
   (row_col_cases_on P (P.rowg r) row col : C (P.rowg r)) = row r :=
 by simp [row_col_cases_on]
 
-local infix ` ♣ `: 70 := pequiv.trans
+local infix ` ♠ `: 70 := pequiv.trans
 
 def swap (P : partition m n) (r : fin m) (s : fin n) : partition m n :=
 { row_indices := P.row_indices.update_nth r (P.col_indices.nth s),
@@ -327,7 +328,7 @@ by rw [← to_matrix_refl, ← P.rowp_trans_rowp_symm, to_matrix_trans, to_matri
 
 lemma mul_transpose_add_mul_transpose (P : partition m n) :
   (P.rowp.to_matrix ⬝ P.rowp.to_matrixᵀ : matrix _ _ ℚ) +
-  P.colp.to_matrix ⬝ P.colp.to_matrixᵀ  = 1 :=
+  P.colp.to_matrix ⬝ P.colp.to_matrixᵀ = 1 :=
 begin
   ext,
   repeat {rw [← to_matrix_symm, ← to_matrix_trans] },

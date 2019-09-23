@@ -18,7 +18,7 @@ instance : has_repr undo :=
   (λ n, "unrestrict " ++ repr n)
   (λ n, "revive_col " ++ repr n)
   (λ n, "delete_row " ++ repr n)⟩
-#print list.length_pos_
+
 open undo
 
 structure stableau (m n : ℕ) extends tableau m n :=
@@ -327,7 +327,7 @@ end
   rw [← sum_union],
   congr,
   simpa [finset.ext, eq_comm] using T.to_partition.eq_rowg_or_colg,
-  { simp [finset.ext, eq_comm, T.to_partition.rowg_ne_colg] {contextual := tt} }
+  { simp [disjoint, subset_iff, eq_comm, T.to_partition.rowg_ne_colg] {contextual := tt} }
 end
 
 lemma add_row_new_eq_sum_fac {T : stableau m n} {fac : rvec (m + n)} {k : ℚ}

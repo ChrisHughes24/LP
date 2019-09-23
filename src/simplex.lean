@@ -612,7 +612,7 @@ subrelation.wf
   (show subrelation (@rel m n obj) (measure (λ T, fintype.card {T' | rel obj T' T})),
     from assume T₁ T₂ h,
     set.card_lt_card (set.ssubset_iff_subset_not_subset.2 ⟨λ T' hT', hT'.trans h,
-      classical.not_forall.2 ⟨T₁, λ h', rel.irrefl _ (h' h)⟩⟩))
+      not_forall_of_exists_not ⟨T₁, λ h', rel.irrefl _ (h' h)⟩⟩))
   (measure_wf (λ T, fintype.card {T' | rel obj T' T}))
 
 end blands_rule
