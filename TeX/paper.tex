@@ -274,7 +274,7 @@ def is_unbounded_above (i : fin (m + n)) : Prop :=
 ∀ q : ℚ, ∃ x : cvec (m + n), x ∈ sol_set T ∧ q ≤ x i 0
 \end{lstlisting}
 
-The type \lstinline|cvec (m + n)| is notation for $m + n \times 1$ matrices. \lstinline|x i 0| is the notation for the $i$th element of this vector.
+The type \lstinline|cvec (m + n)| is notation for $m + n \times 1$ matrices. \lstinline|x i 0| is the notation for the $i$th element of the vector  \lstinline|x|.
 
 The Lean simplex algorithm takes as arguments a tableau, the row that should be optimized and a boolean function, that gives the user the option of terminating the algorithm early. This can be used for example to determine whether the maximum value of a variable is positive, without actually computing the maximum. The simplex algorithm itself returns both a tableau and the reason for termination of the algorithm, either \lstinline|unbounded|, \lstinline|optimal|, or \lstinline|while|. The
 \begin{lstlisting}
@@ -292,6 +292,24 @@ inductive termination (n : ℕ) : Type
 
 \color{red} The full correctness statement is actually quite complicated, but there are simpler versions that state correctness of the most important parts of the algorithm (it returns the correct one out of optimal unbounded or while)\color{black}
 If the simplex algorithm is correct, then the tableau returned should be a feasible tableau, representing the same polyhedron as the starting tableau. Most importantly we also need to prove that it returns the correct condition out of \lstinline|while|, \lstinline|unbounded|, and \lstinline|optimal|.
+
+\begin{lstlisting}
+@[simp] lemma sol_set_simplex (T : tableau m n) (hT : feasible T) (w : tableau m n → bool)
+  (obj : fin m) : (T.simplex w obj hT).1.sol_set = T.sol_set
+
+lemma termination_eq_while_iff {T : tableau m n} {hT : feasible T} {w : tableau m n → bool}
+  {obj : fin m} : (T.simplex w obj hT).2 = while ↔ w (T.simplex w obj hT).1 = ff
+
+lemma termination_eq_optimal_iff {T : tableau m n} {hT : feasible T}
+  {w : tableau m n → bool} {obj : fin m} : (T.simplex w obj hT).2 = optimal ↔
+  w (T.simplex w obj hT).1 = tt ∧
+  is_optimal T ((T.simplex w obj hT).1.of_col 0) (T.to_partition.rowg obj)
+
+lemma termination_eq_unbounded_iff {T : tableau m n} {hT : feasible T}
+  {w : tableau m n → bool} {obj : fin m} {c : fin n}: (T.simplex w obj hT).2 = unbounded c ↔
+  w (T.simplex w obj hT).1 = tt ∧ is_unbounded_above T (T.to_partition.rowg obj)
+  ∧ c ∈ pivot_col (T.simplex w obj hT).1 obj
+\end{lstlisting}
 
 \subsection{pequiv}
 \color{red} I can't really claim confidently that this was any better than any other way of doing this. My initial instinct when starting the project was that proving properties of matrices defined using \lstinline|if ... then ... else ...| would be extremely difficult, however the pivot defined like this was easier to use, and I think the proofs mentioned in this section would be shorter overall with \lstinline| if ... then ... else ...| as well, because of the lines spent proving the properties of the matrices $R$ and $C$ mentioned below. \color{black}
@@ -324,7 +342,14 @@ In this case we are not using $C$ and $R$ to take minors, but rather using $C$ t
 
 The definition of the matrices $R$ and $C$ in Lean uses the concept of a partial equivalence. A partial equivalence between two sets $X$ and $Y$ is a bijection between a subset of $X$ and a subset of $Y$. In the same way that there is a group homomorphism from the set of permutations of $(1, \dots, n)$ into the group of invertible $n \times n$ matrices, there is a functor from the category of partial equivalences on finite sets into the category of matrices.
 
-The partial equivalence corresponding to $R$ is given by the vector $r$,
+The partial equivalence corresponding to $R$ is given by the vector $r$, mapping $i$ to $r_i$. This is an injective function and therefore a bijection with its own image. The matrix $R$ is given by
+\begin{equation}
+R_{ij} =
+\begin{cases}
+1 & \text{if } j = r_i \\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
 
 % \subsection{Our version of the linear programming problem}
 % \color{red}We have dead columns and restricted rows. Describe the tableau data type, and the partition data type.
@@ -473,15 +498,13 @@ In order to provide a proof of termination of the simplex algorithm in Lean, it 
 
 \begin{lstlisting}
 inductive rel : tableau m n → tableau m n → Prop
-| pivot : ∀ {T}, feasible T → ∀ {r c}, c ∈ pivot_col T obj →
-  r ∈ pivot_row T obj c → rel (T.pivot r c) T
-| trans_pivot : ∀ {T₁ T₂ r c}, rel T₁ T₂ → c ∈ pivot_col T₁ obj →
-  r ∈ pivot_row T₁ obj c → rel (T₁.pivot r c) T₂
+| pivot : ∀ {T}, feasible T → ∀ {i j}, pivot_col T obj = some j →
+  pivot_row T obj j = some i → rel (T.pivot i j) T
+| trans_pivot : ∀ {T₁ T₂ i j}, rel T₁ T₂ → pivot_col T₁ obj = some j →
+  pivot_row T₁ obj j = some i → rel (T₁.pivot i j) T₂
 \end{lstlisting}
 
-\color{red}Include description of pivot\_col and pivot\_row functions somewhere. Explain $\in$ notation for option. \color{black}
-
-Two tableau \lstinline|T| and \lstinline|T'| are related if either \lstinline|T' = T.pivot r c| where \lstinline|r| and \lstinline|c| are the pivot row and column selected according to Bland's rule, or if there exists another tableau \lstinline|T₁| such that \lstinline|rel obj T₁ T| and \lstinline|T' = T₁.pivot r c|.
+Two tableau \lstinline|T| and \lstinline|T'| are related if either \lstinline|T' = T.pivot i j| where \lstinline|i| and \lstinline|j| are the pivot row and column selected according to Bland's rule, or if there exists another tableau \lstinline|T₁| such that \lstinline|rel obj T₁ T| and \lstinline|T' = T₁.pivot i j|.
 
 Various properties of the tableau then have to be proven by induction on this relation. The majority of the length of the termination proof was taken up by proving properties of related tableaux and tableaux within a cycle.
 
