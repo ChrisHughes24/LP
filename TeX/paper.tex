@@ -171,7 +171,6 @@ Description of why Lean is a good language to do this in.}
 
 \section{Linear Programming}
 \chris{The standard simplex algorithm. No reference to Lean code}
-
 The simplex algorithm aims to optimize the value of an objective function within the constraints of a set of affine inequalities. It can be used to solve problems of the following form.
 % \color{red} This is a slightly nonstandard way of writing a linear program. The usual way would be $Ax \le b$. However the matrix that is stored during a simplex is $-A$ according to that representation, but $A$ according to the representation below.\color{black}
 \begin{equation}
@@ -267,14 +266,13 @@ The choice of pivot row and column satisfying (\ref{eqn:valid_pivot}) is non-uni
 If there is no column $j$ satisfying $c_j > 0$, then the sample solution must maximize $c^Tx_c$. This is because $c^T \le 0$ and $x_c \ge 0$, so $c^Tx_c \le 0$, and the maximum value of this is given by setting $x_c$ to zero.
 
 \chris{Explanation below could be better}
-
 If there is a column $j$ satisfying $c_j > 0$, but no row $i$ satisfying $A_{ij} < 0$ then the objective function must be unbounded. The variable in column $j$ is unbounded; for any $k > 0$, the solution found by setting the variable in column $j$ to $k$ and all other column variables to zero does not break the nonnegativity constraints of the row variables. The expression for the variable in row $i$ is $A_{ij}k + b_i$, which is nonnegative. The objective function is $c_jk+z$, which is unbounded since $k$ is unbounded.
 
 The simplex algorithm terminates when there is no pivot row and column satisfying the conditions in (\ref{eqn:valid_pivot}). When it terminates it has always either detected unboundedness or found an optimal solution.
 
 \section{Description of our version of the linear programming problem}
-\chris{Our version, dead columns, unrestricted variables, stopping early. Also very little reference to Lean code.}
 
+\chris{Our version, dead columns, unrestricted variables, stopping early. Also very little reference to Lean code.}
 The implementation in Lean follows the implemenentation in the Simplify prover \cite{simplify}. This implementation represents a polyhedron in a slightly different way. There are two additional sets stored, a set of \textit{restricted} variables and a set of \textit{dead} columns.
 
 The optimization problem for this implementation is given by
@@ -563,7 +561,6 @@ R_{ij} =
 \subsection{Bland's Rule}\label{section:bland}
 
 \chris{How much detail to go into in this proof? This was one of the more challenging parts of the formalization, however, the proof is actually not very nicely written at the moment, for example the definition of fickle is not quite the same as in Chvatal. I used a weaker notion that seemed good enough,but then one variable that should be fickle ended up not being fickle, and I had to get round this in a slightly messy way.}
-
 The simplex implemented in Lean uses Bland's rule to ensure termination. If the pivot column is restricted then we choose the column owned by a variable with the smallest index out of the columns that satisfy the condition specified in [refer to earlier section]. We do the same for the rows that satisfy the specified condition.
 
 In order to prove that this rule will terminate, it suffices to prove that the simplex does not repeat a tableau. This is because there are only finitely many tableaux that can be visited by the simplex algorithm; at most one for each of the finitely many partitions of the variables. Supposing that the simplex algorithm does repeat then there is a finite set of ``fickle'' variables that are pivoted during a cycle. By always choosing the variable with the smallest index, we know that the largest of the fickle variables was the unique fickle column variable satisfying [refer to earlier section] in some tableau in the cycle, and the unique fickle row variable in some other tableau in this cycle. It is possible to derive a contradiction from this, though the proof is omitted here \cite{Chvatal}.
@@ -583,9 +580,9 @@ Two tableau \lstinline|T| and \lstinline|T'| are related if either \lstinline|T'
 Various properties of the tableau then have to be proven by induction on this relation. The majority of the length of the termination proof was taken up by proving properties of related tableaux and tableaux within a cycle.
 
 \section{Refined algorithm}
-\chris{Say that we refined it and it is vaguely fast. Do I go into detail about how we did it. Probably quite a short section.}
 
-The simplex algorithm was originally written on an extremely slow implementation of matrices. The implementation in the Lean maths library \chris{cite mathlib} is as the type of binary functions from two finite sets into a ring, in our case $\mathbb{Q}$. This implementation is convenient for writing proofs, but very slow to compute. In order to have a practical executable version of the simplex algorithm, it was necessary to transfer the algorithm and proofs onto a faster implementation of matrices using arrays. Ideally this would be done using a refinement framework \chris{brief explanation of what that means here. Would it be possible to generalize this proof onto a type class rather than a concrete type using this framework?}. This is not currently available in Lean, so it was instead done in an ad hoc way, using a tableau type class. The proof of the simplex algorithm can be generalized onto any type for which there is an instance of the \lstinline|is_tableau| type class.
+\chris{Say that we refined it and it is vaguely fast. Do I go into detail about how we did it. Probably quite a short section.}
+The simplex algorithm was originally written on an extremely slow implementation of matrices. The implementation in the Lean maths library \chris{cite mathlib} is as the type of binary functions from two finite sets into a ring, in our case $\mathbb{Q}$. This implementation is convenient for writing proofs, but very slow to compute. In order to have a practical executable version of the simplex algorithm, it was necessary to transfer the algorithm and proofs onto a faster implementation of matrices using arrays. Ideally this would be done using a refinement framework. \chris{brief explanation of what that means here. Would it be possible to generalize this proof onto a type class rather than a concrete type using this framework?} This is not currently available in Lean, so it was instead done in an ad hoc way, using a tableau type class. The proof of the simplex algorithm can be generalized onto any type for which there is an instance of the \lstinline|is_tableau| type class.
 
 \begin{lstlisting}
 class is_tableau (X : ℕ → ℕ → Type) : Type :=
