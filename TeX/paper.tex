@@ -599,6 +599,9 @@ class is_tableau (X : ℕ → ℕ → Type) : Type :=
 
 By using the \lstinline|is_tableau| type class, implementing and proving correctness of a fast implementation of the simplex algorithm, is reduced to defining an instance of this class. To define an instance of this class, it is necessary to provide a function \lstinline|to_tableau| from a fast tableau type into \lstinline|tableau m n|, and three functions \lstinline|pivot_col|, \lstinline|pivot_row|, and \lstinline|pivot|. The only proofs about these functions that must be provided are that they agree with the functions on \lstinline|tableau m n|. \chris{This sentence needs to be changed}
 
+\section{Related Work}
+
+\tobias{Add reference to related VPL, Coq, Isabelle proofs!}
 
 
 \section{Conclusion}
