@@ -274,7 +274,6 @@ The simplex algorithm terminates when there is no pivot row and column satisfyin
 
 \chris{Our version, dead columns, unrestricted variables, stopping early. Also very little reference to Lean code.}
 The implementation in Lean follows the implemenentation in the Simplify prover \cite{simplify}. This implementation represents a polyhedron in a slightly different way. There are two additional sets stored, a set of \textit{restricted} variables and a set of \textit{dead} columns.
-
 The optimization problem for this implementation is given by
 \begin{equation}
   \begin{aligned}
