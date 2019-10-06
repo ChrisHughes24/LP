@@ -122,12 +122,11 @@ Description of why Lean is a good language to do this in.\color{black}
 
 \section{Linear Programming}
 \color{red} The standard simplex algorithm. No reference to Lean code \color{black}
-
 The simplex algorithm aims to optimize the value of an objective function within the constraints of a set of affine inequalities. It can be used to solve problems of the following form.
 % \color{red} This is a slightly nonstandard way of writing a linear program. The usual way would be $Ax \le b$. However the matrix that is stored during a simplex is $-A$ according to that representation, but $A$ according to the representation below.\color{black}
 \begin{equation}
   \begin{aligned}
-    \text{Find } x \text{ that maximizes } && c^Tx \\
+    \text{Find } x \in \mathbb{Q}^n \text{ that maximizes } && c^Tx \\
     \text{subject to } && A x + b \ge 0\\
     \text{and } && x \ge 0
   \end{aligned}
@@ -301,13 +300,13 @@ def is_unbounded_above (i : fin (m + n)) : Prop :=
 
 The type \lstinline|cvec (m + n)| is notation for $m + n \times 1$ matrices. \lstinline|x i 0| is the notation for the $i$th element of the vector  \lstinline|x|.
 
-The Lean simplex algorithm takes as arguments a tableau, the row that should be optimized and a boolean function, that gives the user the option of terminating the algorithm early. This can be used for example to determine whether the maximum value of a variable is positive, without actually computing the maximum. The simplex algorithm itself returns both a tableau and the reason for termination of the algorithm, either \lstinline|unbounded|, \lstinline|optimal|, or \lstinline|while|. The
+The Lean simplex algorithm takes as arguments a tableau, the row that should be optimized and a boolean function, that gives the user the option of terminating the algorithm early. This can be used for example to determine whether the maximum value of a variable is positive, without actually computing the maximum. The simplex algorithm itself returns both a tableau and the reason for termination of the algorithm, either \lstinline|unbounded|, \lstinline|optimal|, or \lstinline|while|. The function takes as an argument a proof of feasibility of the tableau, since it does not terminate or return a useful for non feasible tableau.
 \begin{lstlisting}
 def simplex (w : tableau m n → bool) (obj : fin m) : Π (T : tableau m n) (hT : feasible T),
   tableau m n × termination n
 \end{lstlisting}
 
-\lstinline|termination n| is an inductive type with three constructors. In the case that the variable is unbounded, the piivot column that was chosen before the algorithm failed to find a pivot row is also returned.
+\lstinline|termination n| is an inductive type with three constructors. In the case that the variable is unbounded, the pivot column that was chosen before the algorithm failed to find a pivot row is also returned.
 \begin{lstlisting}
 inductive termination (n : ℕ) : Type
 | while {}              : termination
@@ -531,7 +530,7 @@ inductive rel : tableau m n → tableau m n → Prop
 
 Two tableau \lstinline|T| and \lstinline|T'| are related if either \lstinline|T' = T.pivot i j| where \lstinline|i| and \lstinline|j| are the pivot row and column selected according to Bland's rule, or if there exists another tableau \lstinline|T₁| such that \lstinline|rel obj T₁ T| and \lstinline|T' = T₁.pivot i j|.
 
-Various properties of the tableau then have to be proven by induction on this relation. The majority of the length of the termination proof was taken up by proving properties of related tableaux and tableaux within a cycle.
+Various properties of the tableau then have to be proven by induction on this relation. The majority of the length of the termination proof was taken up by proving properties of related tableaux and tableaux within a cycle. For example we proved that if a column is owned by a different variable in two related tableau \lstinline|T| and \lstinline|T'|, then this column was the pivot column at some tableau visited in between \lstinline|T| and \lstinline|T'|. Also proven was the fact that if the objective function value at the sample point does not change between \lstinline|T| and \lstinline|T'|, then neither does any value in the constant column. These were then used to prove the relation was irreflexive, and therefore that the algorithm does not repeat a tableau.
 
 \section{Refined algorithm}
 \color{red} Say that we refined it and it is vaguely fast. Do I go into detail about how we did it. Probably quite a short section. \color{black}

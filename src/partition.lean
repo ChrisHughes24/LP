@@ -18,8 +18,7 @@ local infix ` ⬝ `:70 := matrix.mul
 local postfix `ᵀ` : 1500 := transpose
 
 variable (P : partition m n)
-attribute [no_rsimp] add_comm
-#print mul_comm
+
 def fintype_aux : partition m n ≃ { x : vector (fin (m + n)) m × vector (fin (m + n)) n //
   ∀ v : fin (m + n), v ∈ x.1.to_list ∨ v ∈ x.2.to_list } :=
 { to_fun := λ ⟨r, c, h⟩, ⟨⟨r, c⟩, h⟩,

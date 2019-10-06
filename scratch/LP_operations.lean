@@ -1,4 +1,4 @@
-import data.matrix.pequiv data.rat.basic tactic.fin_cases data.list.min_max .partition2
+import data.matrix.pequiv data.rat.basic tactic.fin_cases data.list.min_max partition
 
 open matrix fintype finset function pequiv
 
