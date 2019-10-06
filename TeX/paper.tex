@@ -1,3 +1,11 @@
+\def\paperversiondraft{draft}
+\def\paperversionblind{blind}
+
+\ifx\paperversion\paperversionblind
+\else
+  \def\paperversion{draft}
+\fi
+
 % !TEX TS-program = pdflatex
 % !TEX encoding = UTF-8 Unicode
 
@@ -5,6 +13,37 @@
 % See "book", "report", "letter" for other types of document.
 
 \documentclass[11pt]{article} % use larger type; default would be 10pt
+
+\usepackage{xargs}
+\usepackage{todonotes}
+\usepackage{xparse}
+\usepackage{xifthen, xstring}
+\usepackage{ulem}
+\usepackage{xspace}
+\makeatletter
+\font\uwavefont=lasyb10 scaled 652
+
+\newcommand\colorwave[1][blue]{\bgroup\markoverwith{\lower3\p@\hbox{\uwavefont\textcolor{#1}{\char58}}}\ULon}
+\makeatother
+
+\ifx\paperversion\paperversiondraft
+\newcommand\createtodoauthor[2]{%
+\def\tmpdefault{emptystring}
+\expandafter\newcommand\csname #1\endcsname[2][\tmpdefault]{\def\tmp{##1}\ifthenelse{\equal{\tmp}{\tmpdefault}}
+   {\todo[linecolor=#2!20,backgroundcolor=#2!25,bordercolor=#2,size=\tiny]{\textbf{#1:} ##2}}
+   {\ifthenelse{\equal{##2}{}}{\colorwave[#2]{##1}\xspace}{\todo[linecolor=#2!10,backgroundcolor=#2!25,bordercolor=#2]{\tiny \textbf{#1:} ##2}\colorwave[#2]{##1}}}}}
+\else
+\newcommand\createtodoauthor[2]{%
+\expandafter\newcommand\csname #1\endcsname[2][\@nil]{}}
+\fi
+
+
+\createtodoauthor{chris}{red}
+\createtodoauthor{tobias}{blue}
+\createtodoauthor{authorThree}{green}
+\createtodoauthor{authorFour}{orange}
+\createtodoauthor{authorFive}{purple}
+
 
 %%% Examples of Article customizations
 % These packages are optional, depending whether you want the features they provide.
@@ -20,6 +59,15 @@
 \usepackage{graphicx} % support the \includegraphics command and options
 
 % \usepackage[parfill]{parskip} % Activate to begin paragraphs with an empty line rather than an indent
+
+% Broaden margins to make room for todo notes
+\ifx\paperversion\paperversiondraft
+  \paperwidth=\dimexpr \paperwidth + 6cm\relax
+  \oddsidemargin=\dimexpr\oddsidemargin + 3cm\relax
+  \evensidemargin=\dimexpr\evensidemargin + 3cm\relax
+  \marginparwidth=\dimexpr \marginparwidth + 3cm\relax
+  \setlength{\marginparwidth}{4cm}
+\fi
 
 \usepackage[utf8x]{inputenc}
 \usepackage{amssymb}
@@ -115,13 +163,14 @@ for fast verified constraint programming.
 \end{abstract}
 
 \section{Introduction}
-\color{red}Describe motivation of project.
+\chris{
+Describe motivation of project.
 The aim is to provide a practically computable implementation of the simplex algorithm (Coq version did not aim to do this). It differs in that we use a more complex tableau data type (dead columns and unrestricted rows). We also use a different pivot rule (Bland's Rule - lexicographic rule seems to be an ambiguous name).
 
-Description of why Lean is a good language to do this in.\color{black}
+Description of why Lean is a good language to do this in.}
 
 \section{Linear Programming}
-\color{red} The standard simplex algorithm. No reference to Lean code \color{black}
+\chris{The standard simplex algorithm. No reference to Lean code}
 The simplex algorithm aims to optimize the value of an objective function within the constraints of a set of affine inequalities. It can be used to solve problems of the following form.
 % \color{red} This is a slightly nonstandard way of writing a linear program. The usual way would be $Ax \le b$. However the matrix that is stored during a simplex is $-A$ according to that representation, but $A$ according to the representation below.\color{black}
 \begin{equation}
@@ -132,7 +181,7 @@ The simplex algorithm aims to optimize the value of an objective function within
   \end{aligned}
 \end{equation}
 Here, $x \in \mathbb{Q}^n$, $c \in \mathbb{Q}^n$, $b \in \mathbb{Q}^m$, and $A \in \mathbb{Q}^{m \times n}$.
-This can be written in an equivalent form \color{red} The inclusion of $z$ in the objective function is slightly unusual because obviously maximizing $c^Tx$ is the same as maximizing $c^Tx + z$. However $z$ is a cell in the tableau, it is the objective function value of the sample solution, and the explanation of the tableau is slightly easier with it\color{black}
+This can be written in an equivalent form \chris{The inclusion of $z$ in the objective function is slightly unusual because obviously maximizing $c^Tx$ is the same as maximizing $c^Tx + z$. However $z$ is a cell in the tableau, it is the objective function value of the sample solution, and the explanation of the tableau is slightly easier with it}
 \begin{equation}
   \begin{aligned}
     \text{Find } x_r \text{ and } x_c \text{ that maximize } && c^Tx_c + z \\
@@ -144,7 +193,7 @@ with $x_r \in \mathbb{Q}^m$, $x_c \in \mathbb{Q}^n$ and $z \in \mathbb{Q}$
 
 The affine function $c^T+z$ is known as the \textit{objective function}.
 
-In the tableau representation of this problem, the vectors $x_r$ and $x_c$ are viewed as minors of a single variables $x$. The subset of $\mathbb{Q}^{m+n}$, $\{x : x_c = Ax_r + b \wedge x_c \ge 0 \wedge x_r \ge 0\}$ is stored as part of the simplex algorithm. The tableau consists of a matrix $A$ of coefficients, a column vector $b$, a reduced cost vector $c$, and the constant part of the objective function $z$. Additionally two vectors of indices $r$ and $c$ defining the minors $x_r$ and $x_c$ are also stored.
+In the tableau representation of this problem, the vectors $x_r$ and $x_c$ are viewed as minors of a single variable $x$. The subset of $\mathbb{Q}^{m+n}$, $\{x : x_c = Ax_r + b \wedge x_c \ge 0 \wedge x_r \ge 0\}$ is stored as part of the simplex algorithm. The tableau consists of a matrix $A$ of coefficients, a column vector $b$, a reduced cost vector $c$, and the constant part of the objective function $z$. Additionally two vectors of indices $r$ and $c$ defining the minors $x_r$ and $x_c$ are also stored.
 \begin{equation}
   \begin{aligned}
     x_{r_1} && = && A_{11}x_{c_1} && + && A_{12}x_{c_2} && + && \dots && + && A_{1n}x_{c_n} && + && b_1 \\
@@ -156,7 +205,8 @@ In the tableau representation of this problem, the vectors $x_r$ and $x_c$ are v
 \end{equation}
 In this tableau representation the $x_r$ are known as the \textit{row} variables, and the $x_c$ are the \textit{column} variables. In a tableau the row variables are expressed as affine functions in terms of the column variables.
 
-The simplex algorithm iteratively performs the \textit{pivot} operation on a tableau. The pivot operation takes a row and a column index as an argument, and swaps their positions in the tableau. If $x_{r_i}$ and $x_{c_j}$ are pivoted, then in the new tableau $x_{r_i}$ becomes a row variable and $x_{c_j}$ becomes a column variable. The variables $(x_{r_1}, x_{r_2}, \dots, x_{c_j}, \dots x_{r_m})$ are expressed as affine functions of $(x_{c_1}, x_{c_2}, \dots, x_{r_i}, \dots, x_{c_n})$. The matrix $A$, and the vectors $c$ and $b$ are updated to $A'$, $c'$ and $b'$, such that the tableau represents the same subset of $\mathbb{Q}^{m + n}$, and the same optimization problem. Additionally the vectors $r$ and $c$ are updated to vectors $r' := (r_1, r_2, \dots c_j, \dots, r_m)$ and $c' := (c_1, c_2 \dots r_i, \dots, c_n)$. \color{red} Oops, two things are called $c$ \color{black} Preserving the same polyhedron is possible if $A_{ij} \ne 0$.
+The simplex algorithm iteratively performs the \textit{pivot} operation on a tableau. The pivot operation takes a row and a column index as an argument, and swaps their positions in the tableau. If $x_{r_i}$ and $x_{c_j}$ are pivoted, then in the new tableau $x_{r_i}$ becomes a row variable and $x_{c_j}$ becomes a column variable. The variables $(x_{r_1}, x_{r_2}, \dots, x_{c_j}, \dots x_{r_m})$ are expressed as affine functions of $(x_{c_1}, x_{c_2}, \dots, x_{r_i}, \dots, x_{c_n})$. The matrix $A$, and the vectors $c$ and $b$ are updated to $A'$, $c'$ and $b'$, such that the tableau represents the same subset of $\mathbb{Q}^{m + n}$, and the same optimization problem. Additionally the vectors $r$ and $c$ are updated to vectors $r' := (r_1, r_2, \dots c_j, \dots, r_m)$ and $c' := (c_1, c_2 \dots r_i, \dots, c_n)$.
+\chris{Oops, two things are called $c$} Preserving the same polyhedron is possible if $A_{ij} \ne 0$.
 \begin{equation}
   \begin{aligned}
     x_{r_1} && = && A'_{11}x_{c_1} && + && A'_{12}x_{c_2} && + && \dots && + && A'_{1j}x_{r_i} && + && \dots && + && A'_{1n}x_{c_n} && + && b'_1\\
@@ -193,7 +243,8 @@ A'_{i'j'} = \begin{cases}
   z' = z - c_jb_i/A_{ij}
 \end{equation}
 
-Note that $b$, $c$ and $z$ are updated as though they are a continuation of $A$; $b$ is updated in the same way as a column of $A$, and $c$ is updated in the same way as a row of $A$. \color{red} This is quite important in the understanding of our version of the simplex. In our version we just optimize a variable $x_i$, rather than having an objective function, but this is actually the exact same thing.\color{black}
+Note that $b$, $c$ and $z$ are updated as though they are a continuation of $A$; $b$ is updated in the same way as a column of $A$, and $c$ is updated in the same way as a row of $A$.
+\chris{This is quite important in the understanding of our version of the simplex. In our version we just optimize a variable $x_i$, rather than having an objective function, but this is actually the exact same thing.}
 
 Given any assignment of values to the column variables of a tableau, there is a unique $x$ satisfying $x_r=Ax_c+b$ The \textit{sample solution} of a tableau is the solution of $x_r = Ax_c+b$ found by setting $x_c$ to zero. For this solution $x_r=b$. Similarly, the objective function must have value $z$ in the \textit{sample solution}. A tableau is \textit{feasible} if the sample solution also satisfies $x \ge 0$. This is equivalent to saying $b \ge 0$.
 
@@ -210,21 +261,19 @@ If the condition $A_{ij} < 0$ is met by some index $i$, then the condition $\for
 
 If the pivot row and pivot column satisfy these properties then using the expressions in equations (\ref{eqn:pivot_const}) and (\ref{eqn:pivot_obj}), it can be shown the pivoted tableau is both feasible and that $z$ has either increased or stayed the same.
 
-The choice of pivot row and column satisfying (\ref{eqn:valid_pivot}) is non-unique, and must be chosen carefully in order to guarantee termination. Different implementations of the simplex algorithm use different pivot rules to guarantee termination. If $z$ was strictly increasing it would straightforward to prove the algorithm terminates, since there are only finitely many partitions of the variables into row and column variables, and the simplex algorithm cannot repeat a partition if $z$ is strictly increasing. However when $b_i = 0$ in the pivot row $i$, $z$ does not increase, and ensuring termination is more difficult. Our implementation uses Bland's Rule to ensure termination. \cite{Blands_rule}.
+The choice of pivot row and column satisfying (\ref{eqn:valid_pivot}) is non-unique, and must be taken carefully in order to guarantee termination. Different implementations of the simplex algorithm use different pivot rules to guarantee termination. If $z$ was strictly increasing it would be straightforward to prove the algorithm terminates, since there are only finitely many partitions of the variables into row and column variables, and the simplex algorithm cannot repeat a partition if $z$ is strictly increasing. However when $b_i = 0$ in the pivot row $i$, $z$ does not increase, and ensuring termination is more difficult. Our implementation uses Bland's Rule~\cite{Blands_rule} to ensure termination.
 
 If there is no column $j$ satisfying $c_j > 0$, then the sample solution must maximize $c^Tx_c$. This is because $c^T \le 0$ and $x_c \ge 0$, so $c^Tx_c \le 0$, and the maximum value of this is given by setting $x_c$ to zero.
 
-\color{red} Explanation below could be better\color{black}
-
+\chris{Explanation below could be better}
 If there is a column $j$ satisfying $c_j > 0$, but no row $i$ satisfying $A_{ij} < 0$ then the objective function must be unbounded. The variable in column $j$ is unbounded; for any $k > 0$, the solution found by setting the variable in column $j$ to $k$ and all other column variables to zero does not break the nonnegativity constraints of the row variables. The expression for the variable in row $i$ is $A_{ij}k + b_i$, which is nonnegative. The objective function is $c_jk+z$, which is unbounded since $k$ is unbounded.
 
 The simplex algorithm terminates when there is no pivot row and column satisfying the conditions in (\ref{eqn:valid_pivot}). When it terminates it has always either detected unboundedness or found an optimal solution.
 
 \section{Description of our version of the linear programming problem}
-\color{red} Our version, dead columns, unrestricted variables, stopping early. Also very little reference to Lean code. \color{black}
 
+\chris{Our version, dead columns, unrestricted variables, stopping early. Also very little reference to Lean code.}
 The implementation in Lean follows the implemenentation in the Simplify prover \cite{simplify}. This implementation represents a polyhedron in a slightly different way. There are two additional sets stored, a set of \textit{restricted} variables and a set of \textit{dead} columns.
-
 The optimization problem for this implementation is given by
 \begin{equation}
   \begin{aligned}
@@ -254,7 +303,7 @@ Once the pivot row and column is chosen the tableau is updated in the same way a
 Like the classical simplex, if there is no pivot column then the sample solution is optimal, and if there is no pivot row the objective variable is unbounded. The proofs of these are minor adaptations of the proofs for the classical simplex.
 
 \section{Lean implementation}
-\color{red} Only describe Lean code where I had to do something in a way that was not the obvious way. The termination proof is interesting since the majority of the length of the proof is about stuff that was not mentioned on paper. Also `pequiv` made a few things a little easier and is not obvious. Also state correctness theorems \color{black}
+\chris{Only describe Lean code where I had to do something in a way that was not the obvious way. The termination proof is interesting since the majority of the length of the proof is about stuff that was not mentioned on paper. Also `pequiv` made a few things a little easier and is not obvious. Also state correctness theorems}
 
 \subsection{Correctness statements}
 
@@ -314,7 +363,7 @@ inductive termination (n : ℕ) : Type
 | optimal {}            : termination
 \end{lstlisting}
 
-\color{red} The full correctness statement is actually quite complicated, but there are simpler versions that state correctness of the most important parts of the algorithm (it returns the correct one out of optimal unbounded or while)\color{black}
+\chris{The full correctness statement is actually quite complicated, but there are simpler versions that state correctness of the most important parts of the algorithm (it returns the correct one out of optimal unbounded or while)}
 If the simplex algorithm is correct, then the tableau returned should be a feasible tableau, representing the same polyhedron as the starting tableau. Most importantly we also need to prove that it returns the correct condition out of \lstinline|while|, \lstinline|unbounded|, and \lstinline|optimal|.
 
 \begin{lstlisting}
@@ -336,7 +385,7 @@ lemma termination_eq_unbounded_iff {T : tableau m n} {hT : feasible T}
 \end{lstlisting}
 
 \subsection{pequiv}
-\color{red} I can't really claim confidently that this was any better than any other way of doing this. My initial instinct when starting the project was that proving properties of matrices defined using \lstinline|if ... then ... else ...| would be extremely difficult, however the pivot defined like this was easier to use, and I think the proofs mentioned in this section would be shorter overall with \lstinline| if ... then ... else ...| as well, because of the lines spent proving the properties of the matrices $R$ and $C$ mentioned below. \color{black}
+\chris{I can't really claim confidently that this was any better than any other way of doing this. My initial instinct when starting the project was that proving properties of matrices defined using \lstinline|if ... then ... else ...| would be extremely difficult, however the pivot defined like this was easier to use, and I think the proofs mentioned in this section would be shorter overall with \lstinline| if ... then ... else ...| as well, because of the lines spent proving the properties of the matrices $R$ and $C$ mentioned below.}
 The simplex algorithm requires a lot of reasoning about minors of matrices or vectors. Taking a minor of a matrix is a linear map, and can be expressed as a matrix multiplication. Within the simplex algorithm there are two matrix minors that are often taken, the minor of a vector within a polyhedron corresponding to the column variables, and the minor for the row variables.
 
 Suppose $R^T$ is the matrix mapping $x$ to $x_r$, and $C^T$ is the matrix mapping $x$ to $x_c$. Then $R$ and $C$ have the following properties.
@@ -362,7 +411,7 @@ In this case we are not using $C$ and $R$ to take minors, but rather using $C$ t
   \end{aligned}
 \end{equation}
 
-\color{red} Do I want to go into as much detail as below\color{black}
+\chris{Do I want to go into as much detail as below}
 
 The definition of the matrices $R$ and $C$ in Lean uses the concept of a partial equivalence. A partial equivalence between two sets $X$ and $Y$ is a bijection between a subset of $X$ and a subset of $Y$. In the same way that there is a group homomorphism from the set of permutations of $(1, \dots, n)$ into the group of invertible $n \times n$ matrices, there is a functor from the category of partial equivalences on finite sets into the category of matrices.
 
@@ -510,10 +559,7 @@ R_{ij} =
 
 \subsection{Bland's Rule}\label{section:bland}
 
-\color{red}
-How much detail to go into in this proof? This was one of the more challenging parts of the formalization, however, the proof is actually not very nicely written at the moment, for example the definition of fickle is not quite the same as in Chvatal. I used a weaker notion that seemed good enough,but then one variable that should be fickle ended up not being fickle, and I had to get round this in a slightly messy way.
-\color{black}
-
+\chris{How much detail to go into in this proof? This was one of the more challenging parts of the formalization, however, the proof is actually not very nicely written at the moment, for example the definition of fickle is not quite the same as in Chvatal. I used a weaker notion that seemed good enough,but then one variable that should be fickle ended up not being fickle, and I had to get round this in a slightly messy way.}
 The simplex implemented in Lean uses Bland's rule to ensure termination. If the pivot column is restricted then we choose the column owned by a variable with the smallest index out of the columns that satisfy the condition specified in [refer to earlier section]. We do the same for the rows that satisfy the specified condition.
 
 In order to prove that this rule will terminate, it suffices to prove that the simplex does not repeat a tableau. This is because there are only finitely many tableaux that can be visited by the simplex algorithm; at most one for each of the finitely many partitions of the variables. Supposing that the simplex algorithm does repeat then there is a finite set of ``fickle'' variables that are pivoted during a cycle. By always choosing the variable with the smallest index, we know that the largest of the fickle variables was the unique fickle column variable satisfying [refer to earlier section] in some tableau in the cycle, and the unique fickle row variable in some other tableau in this cycle. It is possible to derive a contradiction from this, though the proof is omitted here \cite{Chvatal}.
@@ -533,9 +579,9 @@ Two tableau \lstinline|T| and \lstinline|T'| are related if either \lstinline|T'
 Various properties of the tableau then have to be proven by induction on this relation. The majority of the length of the termination proof was taken up by proving properties of related tableaux and tableaux within a cycle. For example we proved that if a column is owned by a different variable in two related tableau \lstinline|T| and \lstinline|T'|, then this column was the pivot column at some tableau visited in between \lstinline|T| and \lstinline|T'|. Also proven was the fact that if the objective function value at the sample point does not change between \lstinline|T| and \lstinline|T'|, then neither does any value in the constant column. These were then used to prove the relation was irreflexive, and therefore that the algorithm does not repeat a tableau.
 
 \section{Refined algorithm}
-\color{red} Say that we refined it and it is vaguely fast. Do I go into detail about how we did it. Probably quite a short section. \color{black}
 
-The simplex algorithm was originally written on an extremely slow implementation of matrices. The implementation in the Lean maths library \color{red}[cite mathlib]\color{black} is as the type of binary functions from two finite sets into a ring, in our case $\mathbb{Q}$. This implementation is convenient for writing proofs, but very slow to compute. In order to have a practical executable version of the simplex algorithm, it was necessary to transfer the algorithm and proofs onto a faster implementation of matrices using arrays. Ideally this would be done using a refinement framework \color{red} brief explanation of what that means here. Would it be possible to generalize proof onto a type class rather than a concrete type using this framework?\color{black}. This is not currently available in Lean, so it was instead done in an ad hoc way, using a tableau type class. The proof of the simplex algorithm can be generalized onto any type for which there is an instance of the \lstinline|is_tableau| type class.
+\chris{Say that we refined it and it is vaguely fast. Do I go into detail about how we did it. Probably quite a short section.}
+The simplex algorithm was originally written on an extremely slow implementation of matrices. The implementation in the Lean maths library \chris{cite mathlib} is as the type of binary functions from two finite sets into a ring, in our case $\mathbb{Q}$. This implementation is convenient for writing proofs, but very slow to compute. In order to have a practical executable version of the simplex algorithm, it was necessary to transfer the algorithm and proofs onto a faster implementation of matrices using arrays. Ideally this would be done using a refinement framework. \chris{brief explanation of what that means here. Would it be possible to generalize this proof onto a type class rather than a concrete type using this framework?} This is not currently available in Lean, so it was instead done in an ad hoc way, using a tableau type class. The proof of the simplex algorithm can be generalized onto any type for which there is an instance of the \lstinline|is_tableau| type class.
 
 \begin{lstlisting}
 class is_tableau (X : ℕ → ℕ → Type) : Type :=
@@ -551,14 +597,16 @@ class is_tableau (X : ℕ → ℕ → Type) : Type :=
   pivot_row T = (to_tableau T).pivot_row)
 \end{lstlisting}
 
-By using the \lstinline|is_tableau| type class, implementing and proving correctness of a fast implementation of the simplex algorithm, is reduced to defining an instance of this class. To define an instance of this class, it is necessary to provide a function \lstinline|to_tableau| from a fast tableau type into \lstinline|tableau m n|, and three functions \lstinline|pivot_col|, \lstinline|pivot_row|, and \lstinline|pivot|. The only proofs about these functions that must be provided are that they agree with the functions on \lstinline|tableau m n|. \color{red} This sentence needs to be changed \color{black}
+By using the \lstinline|is_tableau| type class, implementing and proving correctness of a fast implementation of the simplex algorithm, is reduced to defining an instance of this class. To define an instance of this class, it is necessary to provide a function \lstinline|to_tableau| from a fast tableau type into \lstinline|tableau m n|, and three functions \lstinline|pivot_col|, \lstinline|pivot_row|, and \lstinline|pivot|. The only proofs about these functions that must be provided are that they agree with the functions on \lstinline|tableau m n|. \chris{This sentence needs to be changed}
 
+\section{Related Work}
+
+\tobias{Add reference to related VPL, Coq, Isabelle proofs!}
 
 
 \section{Conclusion}
-\color{red}
-Follow up work. Difficulties I came across. It would have been nice to have a generic theory of linear programming. Some of what I wrote could be applied to other implementations of simplex, but not much.
-\color{black}
+\chris{Follow up work. Difficulties I came across. It would have been nice to have a generic theory of linear programming. Some of what I wrote could be applied to other implementations of simplex, but not much.
+}
 \bibliography{bibl}
 
 \end{document}
