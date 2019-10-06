@@ -1,3 +1,7 @@
 *.olean
+*.olean
+*.aux
+*.synctex.gz
+*.log
 /_target
 /leanpkg.path
