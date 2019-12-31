@@ -184,38 +184,40 @@ Here, $x \in \mathbb{Q}^n$, $c \in \mathbb{Q}^n$, $b \in \mathbb{Q}^m$, and $A \
 This can be written in an equivalent form \chris{The inclusion of $z$ in the objective function is slightly unusual because obviously maximizing $c^Tx$ is the same as maximizing $c^Tx + z$. However $z$ is a cell in the tableau, it is the objective function value of the sample solution, and the explanation of the tableau is slightly easier with it}
 \begin{equation}
   \begin{aligned}
-    \text{Find } x_r \text{ and } x_c \text{ that maximize } && c^Tx_c + z \\
-    \text{subject to } && x_r = A x_c + b \\
-    \text{and } && x_r \ge 0, x_c \ge 0
+    \text{Find } x_{row} \text{ and } x_{col} \text{ that maximize } && c^Tx_{col} + z \\
+    \text{subject to } && x_{row} = A x_{col} + b \\
+    \text{and } && x_{row} \ge 0, x_{col} \ge 0
   \end{aligned}
 \end{equation}
-with $x_r \in \mathbb{Q}^m$, $x_c \in \mathbb{Q}^n$ and $z \in \mathbb{Q}$
+with $x_{row} \in \mathbb{Q}^m$, $x_{col} \in \mathbb{Q}^n$ and $z \in \mathbb{Q}$
 
 The affine function $c^T+z$ is known as the \textit{objective function}.
 
-In the tableau representation of this problem, the vectors $x_r$ and $x_c$ are viewed as minors of a single variable $x$. The subset of $\mathbb{Q}^{m+n}$, $\{x : x_c = Ax_r + b \wedge x_c \ge 0 \wedge x_r \ge 0\}$ is stored as part of the simplex algorithm. The tableau consists of a matrix $A$ of coefficients, a column vector $b$, a reduced cost vector $c$, and the constant part of the objective function $z$. Additionally two vectors of indices $r$ and $c$ defining the minors $x_r$ and $x_c$ are also stored.
+In the tableau representation of this problem, the vectors $x_{row}$ and $x_{col}$ are viewed as minors of a single variable $x$. The subset of $\mathbb{Q}^{m+n}$, $\{x : x_{col} = Ax_{row} + b \wedge x_{col} \ge 0 \wedge x_{row} \ge 0\}$ is stored as part of the simplex algorithm. The tableau consists of a matrix $A$ of coefficients, a column vector $b$, a reduced cost vector $c$, and the constant part of the objective function $z$. Additionally two vectors of indices $row$ and $col$ defining the minors $x_{row}$ and $x_{col}$ are also stored.
+The polyhedron defined by a tableau is given by the following set of equations.
 \begin{equation}
   \begin{aligned}
-    x_{r_1} && = && A_{11}x_{c_1} && + && A_{12}x_{c_2} && + && \dots && + && A_{1n}x_{c_n} && + && b_1 \\
-    x_{r_2} && = && A_{21}x_{c_1} && + && A_{22}x_{c_2} && + && \dots && + && A_{2n}x_{c_n} && + && b_2 \\
+    x_{row_1} && = && A_{11}x_{col_1} && + && A_{12}x_{col_2} && + && \dots && + && A_{1n}x_{col_n} && + && b_1 \\
+    x_{row_2} && = && A_{21}x_{col_1} && + && A_{22}x_{col_2} && + && \dots && + && A_{2n}x_{col_n} && + && b_2 \\
     \vdots && && \vdots && && \vdots && && && && \vdots && \vdots \\
-    x_{r_m} && = && A_{m1}x_{c_1} && + && A_{m2}x_{c_2} && + && \dots && + && A_{mn}x_{c_n} && + && b_n \\
-    c^Tx_c + z && = && c_1x_{c_1} && + && c_2x_{c_2} && + && \dots && + && c_nx_{c_n} && + && z
+    x_{row_m} && = && A_{m1}x_{col_1} && + && A_{m2}x_{col_2} && + && \dots && + && A_{mn}x_{col_n} && + && b_n \\
+    c^Tx_{col} + z && = && c_1x_{col_1} && + && c_2x_{col_2} && + && \dots && + && c_nx_{col_n} && + && z
   \end{aligned}
 \end{equation}
-In this tableau representation the $x_r$ are known as the \textit{row} variables, and the $x_c$ are the \textit{column} variables. In a tableau the row variables are expressed as affine functions in terms of the column variables.
+In this tableau representation the $x_{row}$ are known as the \textit{row} variables, and the $x_{col}$ are the \textit{column} variables. In a tableau the row variables are expressed as affine functions in terms of the column variables.
 
-The simplex algorithm iteratively performs the \textit{pivot} operation on a tableau. The pivot operation takes a row and a column index as an argument, and swaps their positions in the tableau. If $x_{r_i}$ and $x_{c_j}$ are pivoted, then in the new tableau $x_{r_i}$ becomes a row variable and $x_{c_j}$ becomes a column variable. The variables $(x_{r_1}, x_{r_2}, \dots, x_{c_j}, \dots x_{r_m})$ are expressed as affine functions of $(x_{c_1}, x_{c_2}, \dots, x_{r_i}, \dots, x_{c_n})$. The matrix $A$, and the vectors $c$ and $b$ are updated to $A'$, $c'$ and $b'$, such that the tableau represents the same subset of $\mathbb{Q}^{m + n}$, and the same optimization problem. Additionally the vectors $r$ and $c$ are updated to vectors $r' := (r_1, r_2, \dots c_j, \dots, r_m)$ and $c' := (c_1, c_2 \dots r_i, \dots, c_n)$.
+The simplex algorithm iteratively performs the \textit{pivot} operation on a tableau. The pivot operation takes a row and a column index as an argument, and swaps their positions in the tableau. If $x_{row_i}$ and $x_{col_j}$ are pivoted, then in the new tableau $x_{row_i}$ becomes a row variable and $x_{col_j}$ becomes a column variable. The variables $(x_{row_1}, x_{row_2}, \dots, x_{col_j}, \dots x_{row_m})$ are expressed as affine functions of $(x_{col_1}, x_{col_2}, \dots, x_{row_i}, \dots, x_{col_n})$. The matrix $A$, and the vectors $c$ and $b$ are updated to $A'$, $c'$ and $b'$, such that the tableau represents the same subset of $\mathbb{Q}^{m + n}$, and the same optimization problem.
+Additionally, the vectors $row$ and $col$ are updated to vectors $row' := (row_1, row_2, \dots col_j, \dots, row_m)$ and $col' := (col_1, col_2 \dots row_i, \dots, col_n)$.
 \chris{Oops, two things are called $c$} Preserving the same polyhedron is possible if $A_{ij} \ne 0$.
 \begin{equation}
   \begin{aligned}
-    x_{r_1} && = && A'_{11}x_{c_1} && + && A'_{12}x_{c_2} && + && \dots && + && A'_{1j}x_{r_i} && + && \dots && + && A'_{1n}x_{c_n} && + && b'_1\\
-    x_{r_2} && = && A'_{21}x_{c_1} && + && A'_{22}x_{c_2} && + && \dots && + && A'_{2j}x_{r_i} && + && \dots && + && A'_{2n}x_{c_n} && + && b'_2\\
+    x_{row_1} && = && A'_{11}x_{col_1} && + && A'_{12}x_{col_2} && + && \dots && + && A'_{1j}x_{row_i} && + && \dots && + && A'_{1n}x_{col_n} && + && b'_1\\
+    x_{row_2} && = && A'_{21}x_{col_1} && + && A'_{22}x_{col_2} && + && \dots && + && A'_{2j}x_{row_i} && + && \dots && + && A'_{2n}x_{col_n} && + && b'_2\\
     \vdots && && \vdots && && \vdots && && && && \vdots && && && && \vdots && && \vdots \\
-    x_{c_j} && = && A'_{i1}x_{c_1} && + && A'_{i2}x_{c_2} && + && \dots && + && A'_{ij}x_{r_i}&& + && \dots && + && A'_{in}x_{c_n} && + && b'_i\\
+    x_{col_j} && = && A'_{i1}x_{col_1} && + && A'_{i2}x_{col_2} && + && \dots && + && A'_{ij}x_{row_i}&& + && \dots && + && A'_{in}x_{col_n} && + && b'_i\\
     \vdots && && \vdots && && \vdots && && && && \vdots && && && && \vdots && && \vdots \\
-    x_{r_m} && = && A'_{m1}x_{c_1} && + && A'_{m2}x_{c_2} && + && \dots && + && A'_{mj}x_{r_i}&& + && \dots && + && A'_{mn}x_{c_n} && + && b'_n\\
-    c^Tx + z && = && c'_1x_{c_1} && + && c'_2x_{c_2} && + && \dots && + && c'_jx_{r_i} && + && \dots && + && c'_nx_{c_n} && + && z'
+    x_{row_m} && = && A'_{m1}x_{col_1} && + && A'_{m2}x_{col_2} && + && \dots && + && A'_{mj}x_{row_i}&& + && \dots && + && A'_{mn}x_{col_n} && + && b'_n\\
+    c^Tx + z && = && c'_1x_{col_1} && + && c'_2x_{col_2} && + && \dots && + && c'_jx_{row_i} && + && \dots && + && c'_nx_{col_n} && + && z'
   \end{aligned}
 \end{equation}
 The expressions for the updated matrix $A'$, and the updated vectors $c'$, $b'$ are given by the following formulas \cite{Nelson:1980:TPV:909447}.
@@ -246,7 +248,7 @@ A'_{i'j'} = \begin{cases}
 Note that $b$, $c$ and $z$ are updated as though they are a continuation of $A$; $b$ is updated in the same way as a column of $A$, and $c$ is updated in the same way as a row of $A$.
 \chris{This is quite important in the understanding of our version of the simplex. In our version we just optimize a variable $x_i$, rather than having an objective function, but this is actually the exact same thing.}
 
-Given any assignment of values to the column variables of a tableau, there is a unique $x$ satisfying $x_r=Ax_c+b$ The \textit{sample solution} of a tableau is the solution of $x_r = Ax_c+b$ found by setting $x_c$ to zero. For this solution $x_r=b$. Similarly, the objective function must have value $z$ in the \textit{sample solution}. A tableau is \textit{feasible} if the sample solution also satisfies $x \ge 0$. This is equivalent to saying $b \ge 0$.
+Given any assignment of values to the column variables of a tableau, there is a unique $x$ satisfying $x_{row}=Ax_{col}+b$ The \textit{sample solution} of a tableau is the solution of $x_{row} = Ax_{col}+b$ found by setting $x_{col}$ to zero. For this solution $x_{row}=b$. Similarly, the objective function must have value $z$ in the \textit{sample solution}. A tableau is \textit{feasible} if the sample solution also satisfies $x \ge 0$. This is equivalent to saying $b \ge 0$.
 
 Given a feasible tableau, the simplex algorithm iteratively pivots whilst maintaining or increasing the objective function value of the sample solution $z$, as well as maintaining feasibility of the tableau. The chosen pivot row and pivot column $i$ and $j$ of a tableau always satisfy the following properties.
 \begin{equation}\label{eqn:valid_pivot}
@@ -263,7 +265,7 @@ If the pivot row and pivot column satisfy these properties then using the expres
 
 The choice of pivot row and column satisfying (\ref{eqn:valid_pivot}) is non-unique, and must be taken carefully in order to guarantee termination. Different implementations of the simplex algorithm use different pivot rules to guarantee termination. If $z$ was strictly increasing it would be straightforward to prove the algorithm terminates, since there are only finitely many partitions of the variables into row and column variables, and the simplex algorithm cannot repeat a partition if $z$ is strictly increasing. However when $b_i = 0$ in the pivot row $i$, $z$ does not increase, and ensuring termination is more difficult. Our implementation uses Bland's Rule~\cite{Blands_rule} to ensure termination.
 
-If there is no column $j$ satisfying $c_j > 0$, then the sample solution must maximize $c^Tx_c$. This is because $c^T \le 0$ and $x_c \ge 0$, so $c^Tx_c \le 0$, and the maximum value of this is given by setting $x_c$ to zero.
+If there is no column $j$ satisfying $c_j > 0$, then the sample solution must maximize $c^Tx_{col}$. This is because $c^T \le 0$ and $x_{col} \ge 0$, so $c^Tx_{col} \le 0$, and the maximum value of this is given by setting $x_{col}$ to zero.
 
 \chris{Explanation below could be better}
 If there is a column $j$ satisfying $c_j > 0$, but no row $i$ satisfying $A_{ij} < 0$ then the objective function must be unbounded. The variable in column $j$ is unbounded; for any $k > 0$, the solution found by setting the variable in column $j$ to $k$ and all other column variables to zero does not break the nonnegativity constraints of the row variables. The expression for the variable in row $i$ is $A_{ij}k + b_i$, which is nonnegative. The objective function is $c_jk+z$, which is unbounded since $k$ is unbounded.
@@ -277,10 +279,10 @@ The implementation in Lean follows the implemenentation in the Simplify prover \
 The optimization problem for this implementation is given by
 \begin{equation}
   \begin{aligned}
-  \text{Find } x \text{ that maximizes } && x_{r_k} \\
-  \text{such that } && x_r = A x_c + b \\
+  \text{Find } x \text{ that maximizes } && x_{row_k} \\
+  \text{such that } && x_{row} = A x_{col} + b \\
   \text{and } && \forall i \in restricted, x_i \ge 0 \\
-  \text{and } && \forall j \in dead, x_{c_j} = 0
+  \text{and } && \forall j \in dead, x_{col_j} = 0
   \end{aligned}
 \end{equation}
 
@@ -289,12 +291,12 @@ The inclusion of the two sets \textit{dead} and \textit{restricted} changes the 
 \begin{equation}
   \begin{aligned}
     A_{kj} \ne 0 \\
-    c_j \in restricted \implies A_{kj} > 0 \\
+    col_j \in restricted \implies A_{kj} > 0 \\
     j \notin dead \\
     i \ne k \\
-    r_i \in restricted \\
+    row_i \in restricted \\
     A_{ij} / A_{kj} < 0 \\
-    \forall i', r_{i'} \in restricted \wedge A_{i'j} / A_{kj} < 0 \implies \left|b_i/A_{ij}\right| \le \left|b_{i'} / A_{i'j}\right|
+    \forall i', row_{i'} \in restricted \wedge A_{i'j} / A_{kj} < 0 \implies \left|b_i/A_{ij}\right| \le \left|b_{i'} / A_{i'j}\right|
   \end{aligned}
 \end{equation}
 
@@ -388,7 +390,7 @@ lemma termination_eq_unbounded_iff {T : tableau m n} {hT : feasible T}
 \chris{I can't really claim confidently that this was any better than any other way of doing this. My initial instinct when starting the project was that proving properties of matrices defined using \lstinline|if ... then ... else ...| would be extremely difficult, however the pivot defined like this was easier to use, and I think the proofs mentioned in this section would be shorter overall with \lstinline| if ... then ... else ...| as well, because of the lines spent proving the properties of the matrices $R$ and $C$ mentioned below.}
 The simplex algorithm requires a lot of reasoning about minors of matrices or vectors. Taking a minor of a matrix is a linear map, and can be expressed as a matrix multiplication. Within the simplex algorithm there are two matrix minors that are often taken, the minor of a vector within a polyhedron corresponding to the column variables, and the minor for the row variables.
 
-Suppose $R^T$ is the matrix mapping $x$ to $x_r$, and $C^T$ is the matrix mapping $x$ to $x_c$. Then $R$ and $C$ have the following properties.
+Suppose $R^T$ is the matrix mapping $x$ to $x_{row}$, and $C^T$ is the matrix mapping $x$ to $x_{col}$. Then $R$ and $C$ have the following properties.
 \begin{equation}\label{eqn:pequiv_props}
   \begin{aligned}
     R^TR = 1 \\
@@ -398,16 +400,16 @@ Suppose $R^T$ is the matrix mapping $x$ to $x_r$, and $C^T$ is the matrix mappin
     RR^T + CC^T = 1
   \end{aligned}
 \end{equation}
-These matrices are used in the definitions of the polyhedron corresponding to a tableau, and also the definition of the function \lstinline|of_col| can be made short by always expressing minors using matrix multiplication. Given $x_c$, and a tableau, the function $ofcol$ computes $x$, satisfying $x_r = Ax_c + b$. The definition is given by
+These matrices are used in the definitions of the polyhedron corresponding to a tableau, and also the definition of the function \lstinline|of_col| can be made short by always expressing minors using matrix multiplication. Given $x_{col}$, and a tableau, the function $ofcol$ computes $x$, satisfying $x_{row} = Ax_{col} + b$. The definition is given by
 \begin{equation}
-  ofcol(x_c) := Cx_c + R(Ax_c+b)
+  ofcol(x_{col}) := Cx_{col} + R(Ax_{col}+b)
 \end{equation}
 In this case we are not using $C$ and $R$ to take minors, but rather using $C$ to assign values to the column variables, and leave zeros elsewhere, and $R$ to assign values to the row variables and zeros elsewhere. The basic properties of this function can be easily proved using the identities in (\ref{eqn:pequiv_props}).
 \begin{equation}
   \begin{aligned}
-    C^Tofcol(x_c) = x_c \\
-    R^Tofcol(x_c) = Ax_c + b \\
-    R^Tofcol(x_c) = AC^Tofcol(x_c) + b
+    C^Tofcol(x_{col}) = x_{col} \\
+    R^Tofcol(x_{col}) = Ax_{col} + b \\
+    R^Tofcol(x_{col}) = AC^Tofcol(x_{col}) + b
   \end{aligned}
 \end{equation}
 
@@ -447,8 +449,8 @@ R_{ij} =
 % The type \verb|fin (m + n)| is the type of nonnegative integers less than \verb|m + n|. The \verb|row_indices| and \verb|column_indices| fields of the structure are vectors of length \verb|m| and \verb|n| respectively, containing elements of \verb|fin (m + n)|. The final field of the structure stipulates that all element of \verb|fin (m + n)| are an element of either \verb|row_indices| or \verb|col_indices|. This also implies, via a pigeonhole argument, that the two vectors are disjoint and have no duplicates. Given vectors $r$ and $c$ of row and column indices, it is possible to define the following minors of any vector $x \in \mathbb{Q}^{m + n}$.
 % \begin{equation}\label{eqn:minor}
 % \begin{aligned}
-% x_r := (x_{r_0}, ... , x_{r_{m-1}}) \\
-% x_c := (x_{c_0}, ... , x_{c_{n-1}})
+% x_{row} := (x_{row_0}, ... , x_{row_{m-1}}) \\
+% x_{col} := (x_{col_0}, ... , x_{col_{n-1}})
 % \end{aligned}
 % \end{equation}
 
@@ -463,9 +465,9 @@ R_{ij} =
 
 % \color{red}Should I go into detail on the \lstinline|pequiv| data type and how I use it? It is referred to in the definition of \lstinline|flat| and \lstinline|of_col|, and consequently in the statements of the correctness proofs, but actually not used very much in the proofs, and turned out to be not as useful as I thought at first.\color{black}
 
-% These ``row'' variables are then expressed as affine combinations of the ``column'' variables by the tableau. Given an $m \times n$ matrix $A$, and a constant vector $k \in \mathbb{Q}^m$, we can express the following relation between the current row variables $x_r$ and column variables $x_c$.
+% These ``row'' variables are then expressed as affine combinations of the ``column'' variables by the tableau. Given an $m \times n$ matrix $A$, and a constant vector $k \in \mathbb{Q}^m$, we can express the following relation between the current row variables $x_{row}$ and column variables $x_{col}$.
 % \begin{equation}\label{eqn:axk}
-%   x_r = Ax_c + k
+%   x_{row} = Ax_{col} + k
 % \end{equation}
 
 % The tableau data type in Lean, consists of an $m \times n$ matrix, the constant vector \verb|const|, a set of restricted variables, constrained to be nonnegative, and the set of dead columns, constrained to be equal to zero. It also contains a \verb|partition m n|, defining the current row and column variables.
@@ -488,7 +490,7 @@ R_{ij} =
 %   T.to_matrix ⬝ T.to_partition.colp.to_matrix ⬝ x + T.const }
 % \end{lstlisting}
 
-% \verb|T.to_partition.rowp.to_matrix| is an $m \times (m + n)$ matrix, which corresponds to the linear map taking the minor $x_r$ of $x$ defined in (\ref{eqn:minor}). \verb|T.to_partition.colp.to_matrix| does the same for the column variables. This equation is the same as the equation in (\ref{eqn:axk}). The notation \lstinline|⬝| is used for matrix multiplication.
+% \verb|T.to_partition.rowp.to_matrix| is an $m \times (m + n)$ matrix, which corresponds to the linear map taking the minor $x_{row}$ of $x$ defined in (\ref{eqn:minor}). \verb|T.to_partition.colp.to_matrix| does the same for the column variables. This equation is the same as the equation in (\ref{eqn:axk}). The notation \lstinline|⬝| is used for matrix multiplication.
 
 % The other relevant sets are the \verb|res_set|, the intersection of the flat and the set such that all restricted variables are nonnegative, and the \verb|dead_set|, the intersection of the flat and the set such that the variables assigned to all dead columns are equal to zero. Finally the main object of study is the \verb|sol_set|; the intersection of the \verb|res_set| and the \verb|dead_set|. In the definition of \lstinline|sol_set|, \lstinline|T.to_partition.colg j| returns the variable assigned to the column \lstinline |j| in \lstinline|T|.
 
