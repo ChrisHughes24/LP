@@ -1,5 +1,4 @@
 *.olean
-*.olean
 *.aux
 *.synctex.gz
 *.log
