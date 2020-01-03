@@ -9,11 +9,11 @@ Xavier Allamigeon and Ricardo~D. Katz.
 \newblock A formalization of convex polyhedra based on the simplex method.
 \newblock {\em CoRR}, abs/1706.10269, 2017.
 
-\bibitem{VPL}
-Sylvain Boulme, Alexandre Marechaly, David Monniaux, Michael Perin, and Hang
-  Yu.
+\bibitem{8750763}
+S.~{Boulmé}, A.~{Maréchaly}, D.~{Monniaux}, M.~{Périn}, and H.~{Yu}.
 \newblock The verified polyhedron library: an overview.
-\newblock pages 9--17, 09 2018.
+\newblock In {\em 2018 20th International Symposium on Symbolic and Numeric
+  Algorithms for Scientific Computing (SYNASC)}, pages 9--17, Sep. 2018.
 
 \bibitem{Chvatal}
 Va{\v{s}}ek Chv{\'a}tal.
@@ -25,6 +25,10 @@ Va{\v{s}}ek Chv{\'a}tal.
 David Detlefs, Greg Nelson, and James Saxe.
 \newblock Simplify: A theorem prover for program checking.
 \newblock {\em Journal of the ACM}, 52, 09 2003.
+
+\bibitem{community2019lean}
+The mathlib Community.
+\newblock The lean mathematical library, 2019.
 
 \bibitem{Nelson:1980:TPV:909447}
 Charles~Gregory Nelson.
