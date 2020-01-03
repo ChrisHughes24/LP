@@ -393,15 +393,15 @@ by simp only [dead_set, flat, to_tableau_pivot, to_matrix, to_partition, const, 
   (hdead : c ∉ (dead T)) : sol_set ((pivot T) r c) = (sol_set T) :=
 by simp [sol_set_eq_dead_set_inter, dead_set_pivot hrs hdead, flat_pivot hrs]
 
-lemma mul_single_ext {R : Type*} {m n : ℕ} [semiring R]
-  {A B : matrix (fin m) (fin n) R} (h : ∀ j : fin n, A ⬝ (single j (0 : fin 1)).to_matrix = B ⬝
-    (single j (0 : fin 1)).to_matrix) : A = B :=
-by ext i j; simpa [matrix_mul_apply] using congr_fun (congr_fun (h j) i) 0
+-- lemma mul_single_ext {R : Type*} {m n : ℕ} [semiring R]
+--   {A B : matrix (fin m) (fin n) R} (h : ∀ j : fin n, A ⬝ (single j (0 : fin 1)).to_matrix = B ⬝
+--     (single j (0 : fin 1)).to_matrix) : A = B :=
+-- by ext i j; simpa [matrix_mul_apply] using congr_fun (congr_fun (h j) i) 0
 
-lemma single_mul_ext {R : Type*} {m n : ℕ} [semiring R]
-  {A B : matrix (fin m) (fin n) R} (h : ∀ i, (single (0 : fin 1) i).to_matrix ⬝ A =
-    (single (0 : fin 1) i).to_matrix ⬝ B) : A = B :=
-by ext i j; simpa [mul_matrix_apply] using congr_fun (congr_fun (h i) 0) j
+-- lemma single_mul_ext {R : Type*} {m n : ℕ} [semiring R]
+--   {A B : matrix (fin m) (fin n) R} (h : ∀ i, (single (0 : fin 1) i).to_matrix ⬝ A =
+--     (single (0 : fin 1) i).to_matrix ⬝ B) : A = B :=
+-- by ext i j; simpa [mul_matrix_apply] using congr_fun (congr_fun (h i) 0) j
 
 -- lemma ext {T₁ T₂ : X m n} (hflat : T₁.flat = T₂.flat)
 --   (hpartition : T₁.to_partition = T₂.to_partition)

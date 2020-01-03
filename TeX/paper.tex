@@ -584,7 +584,7 @@ Various properties of the tableau then have to be proven by induction on this re
 \section{Refined algorithm}
 
 \chris{Say that we refined it and it is vaguely fast. Do I go into detail about how we did it. Probably quite a short section.}
-The simplex algorithm was originally written on an extremely slow implementation of matrices. The implementation in the Lean maths library \chris{cite mathlib} is as the type of binary functions from two finite sets into a ring, in our case $\mathbb{Q}$. This implementation is convenient for writing proofs, but very slow to compute. In order to have a practical executable version of the simplex algorithm, it was necessary to transfer the algorithm and proofs onto a faster implementation of matrices using arrays. Ideally this would be done using a refinement framework. \chris{brief explanation of what that means here. Would it be possible to generalize this proof onto a type class rather than a concrete type using this framework?} This is not currently available in Lean, so it was instead done in an ad hoc way, using a tableau type class. The proof of the simplex algorithm can be generalized onto any type for which there is an instance of the \lstinline|is_tableau| type class.
+The simplex algorithm was originally written on an extremely slow implementation of matrices. The implementation in the Lean maths library \cite{community2019lean} is as the type of binary functions from two finite sets into a ring, in our case $\mathbb{Q}$. This implementation is convenient for writing proofs, but very slow to compute. In order to have a practical executable version of the simplex algorithm, it was necessary to transfer the algorithm and proofs onto a faster implementation of matrices using arrays. Ideally this would be done using a refinement framework. \chris{brief explanation of what that means here. Would it be possible to generalize this proof onto a type class rather than a concrete type using this framework?} This is not currently available in Lean, so it was instead done in an ad hoc way, using a tableau type class. The proof of the simplex algorithm can be generalized onto any type for which there is an instance of the \lstinline|is_tableau| type class.
 
 \begin{lstlisting}
 class is_tableau (X : ℕ → ℕ → Type) : Type :=
@@ -606,13 +606,28 @@ By using the \lstinline|is_tableau| type class, implementing and proving correct
 
 \tobias{Add reference to related VPL, Coq, Isabelle proofs!}
 
-There are existing formalizations of the simplex algorithm in both Coq \cite{DBLP:journals/corr/AllamigeonK17} and Isabelle \cite{10.1007/978-3-642-32759-9_35}. Additionally the Verified Polyhedron Library \cite{VPL} has some formalization related to the simplex algorithm.
+There are existing formalizations of the simplex algorithm in both Coq \cite{DBLP:journals/corr/AllamigeonK17} and Isabelle \cite{10.1007/978-3-642-32759-9_35}. Additionally the Verified Polyhedron Library \cite{8750763} has some formalization related to the simplex algorithm.
 
-The Coq implementation differs from this implementation in that it was not intended to produce code that could be compiled into a reasonably fast executable algorithm but to use the simplex algorithm as a "tool" to be used to prove other theorems. Consequently they took a very different approach to the proof of the algorithm. They used symbolic perturbation as opposed to Bland's rule for the pivot rule, which leads to a more intuitive proof of termination. The approach taken to their proofs is very different
+The Coq implementation \cite{DBLP:journals/corr/AllamigeonK17} differs from this implementation in that it was not intended to produce code that could be compiled into a reasonably fast executable algorithm but to use the simplex algorithm as a "tool" to be used to prove other theorems. Consequently they took a very different approach to the proof of the algorithm. They used symbolic perturbation as opposed to Bland's rule for the pivot rule, which leads to a more intuitive proof of termination. The approach taken to their proofs is different. In our implementation a polyhedron was represented in the following form.
+$x_{row} = A x_{col} + b$. The Coq implementation uses the representation $Ax = b$, where $A$ is of the form $(A'\ |\ I)P$, where $P$ is a permutation matrix. With this representation, the pivot operation can be defined as a matrix multiplication on the left.
+
+\chris{I don't fully understand how these VPL certificates work, but they seem to be a very different approach anyway, so I don't think much detail is needed}
+The Verified Polyhedron Library \cite{8750763} exacutes unverified polyhedral which return certificates of correctness of results which can then be checked by verified code written in Coq. This is very different from our approach where there is no need for certificates since the simplex algorithm itself is verified.
+
+\chris{Isabelle seems to do what we did but better}
 
 \section{Conclusion}
-\chris{Follow up work. Difficulties I came across. It would have been nice to have a generic theory of linear programming. Some of what I wrote could be applied to other implementations of simplex, but not much.
-}
+
+\chris{Follow up work. Difficulties I came across. It would have been nice to have a generic theory of linear programming. Some of what I wrote could be applied to other implementations of simplex, but not much.}
+
+The formalization followed the approach of proving the simplex algorithm on an inefficient representation and then transferring proofs to a tableau type class. Instead of this approach, it may have been possible to prove the results directly on a tableau type class. An advantage of this approach may have been that the proofs could be made more general. There are many variations on the simplex algorithm, the principal difference being the pivot rule. By using an appropriate tableau type class it may have been possible to develop a theory of linear programming that could be applied to multiple different versions of the simplex algorithm.
+
+\chris{A better explanation of the two approaches here would be good}
+One surprising aspect of the formalization was that the traditional pedagogical approach to simplex proofs was not the easiest to formalize. Initially I planned to formalize the proofs in a manner similar to the Coq implementation \cite{DBLP:journals/corr/AllamigeonK17}, and define the pivot operation using multiplication of matrices. This might be expected to be easier, since proving properties of functions defined in terms of other functions that are already well understood is usually easier. However this turned out to be harder than defining the pivot operation by explicit formulas for the value in each cell of the updated matrix. Using this second approach is also closer to how simplex algorithms are implemented in practice.
+
+There was surprisingly little need for the mathlib. Although the support in mathlib for matrices was very limited, this was not a problem. Even elementary concepts such as rank, or matrix inverses were not required. This was due in large part to the fact that none of the basic operations on matrices were used in the definition of the pivot operation, there was no addition or multiplication required to pivot the matrix. Indeed, even addition and multiplication of matrices were very rarely used in any of the proofs.
+
+
 \bibliography{bibl}
 
 \end{document}

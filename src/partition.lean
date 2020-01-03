@@ -276,7 +276,7 @@ end
   option.get ha = option.get hb ↔ a = b
 | (some a) (some b) _ _ := by rw [option.get_some, option.get_some, option.some_inj]
 
-@[extensionality] lemma ext {P C : partition m n} (h : ∀ i, P.rowg i = C.rowg i)
+@[ext] lemma ext {P C : partition m n} (h : ∀ i, P.rowg i = C.rowg i)
   (h₂ : ∀ j, P.colg j = C.colg j) : P = C :=
 begin
   cases P, cases C,
