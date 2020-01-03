@@ -133,6 +133,7 @@
 \lstset{language=lean}
 \lstset{basicstyle=\normalsize}
 \maketitle
+\chris{We should mention somewhere that we only did Phase 2 of the textbook simplex}
 \begin{abstract}
 % What is the general topic we look at?
 Correct and efficient linear programming, using the simplex
@@ -263,7 +264,7 @@ If the condition $A_{ij} < 0$ is met by some index $i$, then the condition $\for
 
 If the pivot row and pivot column satisfy these properties then using the expressions in equations (\ref{eqn:pivot_const}) and (\ref{eqn:pivot_obj}), it can be shown the pivoted tableau is both feasible and that $z$ has either increased or stayed the same.
 
-The choice of pivot row and column satisfying (\ref{eqn:valid_pivot}) is non-unique, and must be taken carefully in order to guarantee termination. Different implementations of the simplex algorithm use different pivot rules to guarantee termination. If $z$ was strictly increasing it would be straightforward to prove the algorithm terminates, since there are only finitely many partitions of the variables into row and column variables, and the simplex algorithm cannot repeat a partition if $z$ is strictly increasing. However when $b_i = 0$ in the pivot row $i$, $z$ does not increase, and ensuring termination is more difficult. Our implementation uses Bland's Rule~\cite{Blands_rule} to ensure termination.
+The choice of pivot row and column satisfying (\ref{eqn:valid_pivot}) is non-unique, and must be taken carefully in order to guarantee termination. Different implementations of the simplex algorithm use different pivot rules to guarantee termination. If $z$ was strictly increasing it would be straightforward to prove the algorithm terminates, since there are only finitely many partitions of the variables into row and column variables, and the simplex algorithm cannot repeat a partition if $z$ is strictly increasing. However when $b_i = 0$ in the pivot row $i$, $z$ does not increase, and ensuring termination is more difficult. Our implementation uses Bland's Rule \cite{Blands_rule} to ensure termination.
 
 If there is no column $j$ satisfying $c_j > 0$, then the sample solution must maximize $c^Tx_{col}$. This is because $c^T \le 0$ and $x_{col} \ge 0$, so $c^Tx_{col} \le 0$, and the maximum value of this is given by setting $x_{col}$ to zero.
 
@@ -605,6 +606,9 @@ By using the \lstinline|is_tableau| type class, implementing and proving correct
 
 \tobias{Add reference to related VPL, Coq, Isabelle proofs!}
 
+There are existing formalizations of the simplex algorithm in both Coq \cite{DBLP:journals/corr/AllamigeonK17} and Isabelle \cite{10.1007/978-3-642-32759-9_35}. Additionally the Verified Polyhedron Library \cite{VPL} has some formalization related to the simplex algorithm.
+
+The Coq implementation differs from this implementation in that it was not intended to produce code that could be compiled into a reasonably fast executable algorithm but to use the simplex algorithm as a "tool" to be used to prove other theorems. Consequently they took a very different approach to the proof of the algorithm. They used symbolic perturbation as opposed to Bland's rule for the pivot rule, which leads to a more intuitive proof of termination. The approach taken to their proofs is very different
 
 \section{Conclusion}
 \chris{Follow up work. Difficulties I came across. It would have been nice to have a generic theory of linear programming. Some of what I wrote could be applied to other implementations of simplex, but not much.

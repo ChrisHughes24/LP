@@ -1,0 +1,43 @@
+\begin{thebibliography}{1}
+
+\bibitem{Blands_rule}
+New finite pivoting rules for the simplex method.
+\newblock {\em Math. Oper. Res.}, 2(2):103--107, May 1977.
+
+\bibitem{DBLP:journals/corr/AllamigeonK17}
+Xavier Allamigeon and Ricardo~D. Katz.
+\newblock A formalization of convex polyhedra based on the simplex method.
+\newblock {\em CoRR}, abs/1706.10269, 2017.
+
+\bibitem{VPL}
+Sylvain Boulme, Alexandre Marechaly, David Monniaux, Michael Perin, and Hang
+  Yu.
+\newblock The verified polyhedron library: an overview.
+\newblock pages 9--17, 09 2018.
+
+\bibitem{Chvatal}
+Va{\v{s}}ek Chv{\'a}tal.
+\newblock {\em Linear programming}.
+\newblock A series of books in the mathematical science. Freeman, New York,
+  1983.
+
+\bibitem{simplify}
+David Detlefs, Greg Nelson, and James Saxe.
+\newblock Simplify: A theorem prover for program checking.
+\newblock {\em Journal of the ACM}, 52, 09 2003.
+
+\bibitem{Nelson:1980:TPV:909447}
+Charles~Gregory Nelson.
+\newblock {\em Techniques for Program Verification}.
+\newblock PhD thesis, Stanford, CA, USA, 1980.
+\newblock AAI8011683.
+
+\bibitem{10.1007/978-3-642-32759-9_35}
+Mirko Spasi{\'{c}} and Filip Mari{\'{c}}.
+\newblock Formalization of incremental simplex algorithm by stepwise
+  refinement.
+\newblock In Dimitra Giannakopoulou and Dominique M{\'e}ry, editors, {\em FM
+  2012: Formal Methods}, pages 434--449, Berlin, Heidelberg, 2012. Springer
+  Berlin Heidelberg.
+
+\end{thebibliography}
