@@ -1,4 +1,4 @@
-import simplex
+import simple
 
 open tableau finset
 variables {m n : ℕ}
