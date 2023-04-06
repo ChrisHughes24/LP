@@ -1,4 +1,4 @@
-import simple
+import simpl
 
 open tableau finset
 variables {m n : ℕ}
